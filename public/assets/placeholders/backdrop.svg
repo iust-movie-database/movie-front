@@ -1,0 +1,13 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="backdropGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1e293b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#334155;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#backdropGrad)"/>
+  <circle cx="1400" cy="300" r="200" fill="rgba(139,92,246,0.1)"/>
+  <circle cx="500" cy="800" r="300" fill="rgba(167,139,250,0.08)"/>
+  <circle cx="1000" cy="500" r="150" fill="rgba(109,40,217,0.12)"/>
+</svg>
