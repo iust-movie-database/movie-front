@@ -1,8 +1,10 @@
+// src/app/App.tsx
 import { useState, useRef, useEffect } from "react";
 import {
   Star, Bookmark, BookmarkCheck, Search, ChevronLeft, ChevronRight,
-  ChevronDown, X, Edit2, Trash2, Award, Calendar, Clock, Sun, Moon,
+  ChevronDown, X, Edit2, Trash2, Calendar, Clock, Sun, Moon,
 } from "lucide-react";
+import { Award } from "lucide-react";
 import { translations as t, toPersianDigits, formatPersianNumber, genreIcons } from "../i18n/fa";
 import { AuthFlow } from "./components/AuthFlow";
 import {
@@ -16,9 +18,158 @@ import {
   SectionHeader,
 } from "./components/shared";
 import { MOVIES, TV_SERIES, COMING_SOON, SEED_RATINGS } from "./data/mockData";
-import type { Page, MovieData, ComingSoonData, RatedEntry } from "./types";
+import type { Page, MovieData, RatedEntry } from "./types";
 
-// ── Shared Components (remaining in-file for now) ──────────────────────────────
+// Import all API functions
+import { 
+  getHero, 
+  getPopularGenres, 
+  getTopMovies, 
+  getTopSeries, 
+  getRecommendations, 
+  getComingSoon,
+  getTitleDetails,
+  getTitleCast,
+  getTitleCrew,
+  getTitleAwards,
+  getTitleReviews,
+  getSimilarTitles,
+  getSeasons,
+  getEpisodes,
+  searchTitles
+} from "../services/api";
+
+// Import types from api.ts
+import type { 
+  HeroTitle, 
+  PopularGenre, 
+  TopMovie, 
+  TopSeries, 
+  Recommendation,
+  TitleDetails,
+  CastMember,
+  CrewMember,
+  Review,
+  SimilarTitle,
+  Season,
+  Episode,
+  SearchResult,
+  SearchParams  // <-- این خط را اضافه کنید
+} from "../services/api";
+
+// تابع تبدیل HeroTitle به MovieData
+function convertHeroToMovieData(hero: HeroTitle): MovieData {
+  return {
+    id: hero.title_id,
+    title: hero.name_fa,
+    originalTitle: hero.name_en,
+    img: hero.poster_url || '/placeholder.jpg',
+    rating: hero.score,
+    year: hero.release_year,
+    duration: hero.duration_mins ? `${hero.duration_mins} دقیقه` : 
+              hero.total_seasons ? `${hero.total_seasons} فصل` : 'نامشخص',
+    age: hero.age_rating,
+    summary: hero.summary,
+    genres: hero.genres.split(', '),
+    type: hero.t_type === 'S' ? 'TV' : 'Movie',
+    voteCount: 0,
+    similarMovieIds: [],
+    cast: [],
+    crew: [],
+    awards: [],
+    reviews: [],
+  };
+}
+
+function convertTopMovieToMovieData(movie: TopMovie): MovieData {
+  return {
+    id: movie.title_id,
+    title: movie.name_fa,
+    originalTitle: movie.name_en,
+    img: movie.poster_url || '/placeholder.jpg',
+    rating: movie.score,
+    year: movie.release_year,
+    duration: movie.duration_mins ? `${movie.duration_mins} دقیقه` : 'نامشخص',
+    age: movie.age_rating,
+    summary: '',
+    genres: movie.genres.split(', '),
+    type: 'Movie',
+    voteCount: 0,
+    similarMovieIds: [],
+    cast: [],
+    crew: [],
+    awards: [],
+    reviews: [],
+  };
+}
+
+function convertTopSeriesToMovieData(series: TopSeries): MovieData {
+  return {
+    id: series.title_id,
+    title: series.name_fa,
+    originalTitle: series.name_en,
+    img: series.poster_url || '/placeholder.jpg',
+    rating: series.score,
+    year: series.release_year,
+    duration: series.total_episodes ? `${series.total_episodes} قسمت` : 'نامشخص',
+    age: series.age_rating,
+    summary: '',
+    genres: series.genres.split(', '),
+    type: 'TV',
+    voteCount: 0,
+    similarMovieIds: [],
+    cast: [],
+    crew: [],
+    awards: [],
+    reviews: [],
+  };
+}
+
+function convertRecommendationToMovieData(rec: Recommendation): MovieData {
+  return {
+    id: rec.title_id,
+    title: rec.name_fa,
+    originalTitle: rec.name_en,
+    img: rec.poster_url || '/placeholder.jpg',
+    rating: rec.score,
+    year: rec.release_year,
+    duration: rec.duration_mins ? `${rec.duration_mins} دقیقه` : 
+              rec.total_seasons ? `${rec.total_seasons} فصل` : 'نامشخص',
+    age: rec.age_rating,
+    summary: '',
+    genres: rec.genres.split(', '),
+    type: rec.t_type === 'S' ? 'TV' : 'Movie',
+    voteCount: 0,
+    similarMovieIds: [],
+    cast: [],
+    crew: [],
+    awards: [],
+    reviews: [],
+  };
+}
+
+function convertSearchResultToMovieData(item: SearchResult): MovieData {
+  return {
+    id: item.title_id,
+    title: item.name_fa,
+    originalTitle: item.name_en,
+    img: item.poster_url || '/placeholder.jpg',
+    rating: item.score,
+    year: item.release_year,
+    duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
+              item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
+    age: item.age_rating || 'نامشخص',
+    summary: '',
+    genres: item.genres.split(', '),
+    type: item.t_type === 'S' ? 'TV' : 'Movie',
+    voteCount: item.vote_count || 0,
+    similarMovieIds: [],
+    cast: [],
+    crew: [],
+    awards: [],
+    reviews: [],
+  };
+}
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
 
@@ -26,7 +177,7 @@ function Nav({
   page, setPage, globalSearch, setGlobalSearch, isLoggedIn, onLogin, onLogout, theme, onThemeToggle,
 }: {
   page: Page;
-  setPage: (p: Page) => void;
+  setPage: (p: Page, movieData?: MovieData) => void;
   globalSearch: string;
   setGlobalSearch: (q: string) => void;
   isLoggedIn: boolean;
@@ -93,12 +244,10 @@ function Nav({
     <>
       <nav ref={navRef} className="sticky top-0 z-50 bg-background/96 backdrop-blur-md border-b border-border">
         <div className="max-w-[1440px] mx-auto px-8 h-16 flex items-center gap-8">
-          {/* Logo */}
           <button onClick={() => setPage("home")} className="flex-shrink-0 flex items-center gap-1.5 mr-2">
             <span className="text-primary font-bold text-2xl tracking-tight leading-none" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>{t.appName}</span>
           </button>
 
-          {/* Nav Links */}
           {!searchOpen && (
             <div className="flex items-center gap-1 flex-1">
               {links.map((l) => {
@@ -114,7 +263,6 @@ function Nav({
             </div>
           )}
 
-          {/* Expanded Search Input */}
           {searchOpen && (
             <div className="flex-1 relative">
               <Search size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
@@ -134,7 +282,6 @@ function Nav({
             </div>
           )}
 
-          {/* Right side */}
           <div className="flex items-center gap-3 flex-shrink-0">
             {searchOpen ? (
               <button onClick={() => { setSearchOpen(false); setGlobalSearch(""); }}
@@ -156,7 +303,7 @@ function Nav({
                 <div className="w-px h-5 bg-white/10 dark:bg-white/10 light:bg-black/10" />
                 <button
                   onClick={() => setPage("profile")}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/6 dark:bg-white/6 light:bg-black/6 border border-white/12 dark:border-white/12 light:border-black/12 hover:bg-white/10 dark:hover:bg-white/10 light:hover:bg-black/10 hover:border-white/20 dark:hover:border-white/20 light:hover:border-black/20 transition-all"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/6 dark:bg-white/6 light:bg-black/6 border border-white/12 dark:border-white/12 light:border-black/12 hover:bg-white/10 dark:hover:bg-white/10 light:hover:bg-black/10 transition-all"
                 >
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#E50914] to-[#5A0009] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
                     style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
@@ -195,7 +342,6 @@ function Nav({
           </div>
         </div>
 
-        {/* Search dropdown */}
         {showDropdown && (
           <div className="absolute left-0 right-0 top-full bg-background/98 backdrop-blur-md border-b border-white/8 dark:border-white/8 light:border-black/10 shadow-2xl z-50">
             <div className="max-w-[1440px] mx-auto px-8 py-3">
@@ -274,7 +420,6 @@ function DesignSystemPage() {
         </p>
       </div>
 
-      {/* Colors */}
       <section className="mb-14">
         <h2
           className="text-xl font-bold text-white mb-6 uppercase tracking-wide"
@@ -296,7 +441,6 @@ function DesignSystemPage() {
         </div>
       </section>
 
-      {/* Typography */}
       <section className="mb-14">
         <h2
           className="text-xl font-bold text-white mb-6 uppercase tracking-wide"
@@ -353,7 +497,6 @@ function DesignSystemPage() {
         </div>
       </section>
 
-      {/* Components */}
       <section>
         <h2
           className="text-xl font-bold text-white mb-6 uppercase tracking-wide"
@@ -362,7 +505,6 @@ function DesignSystemPage() {
           Components
         </h2>
         <div className="grid grid-cols-2 gap-6">
-          {/* Movie Card */}
           <div className="bg-[#1A1A1A] rounded-2xl p-8 border border-white/8">
             <p className="text-white/25 text-[10px] uppercase tracking-[0.2em] font-mono mb-5">Movie Card</p>
             <div className="w-44">
@@ -370,7 +512,6 @@ function DesignSystemPage() {
             </div>
           </div>
 
-          {/* Buttons + Interactive */}
           <div className="bg-[#1A1A1A] rounded-2xl p-8 border border-white/8 space-y-8">
             <div>
               <p className="text-white/25 text-[10px] uppercase tracking-[0.2em] font-mono mb-4">Save Button</p>
@@ -425,8 +566,7 @@ function DesignSystemPage() {
   );
 }
 
-
-// ── Page 2: Homepage ───────────────────────────────────────────────────────────
+// ── Page 2: Homepage (با اتصال به API) ─────────────────────────────────────────
 
 function HomePage({
   setPage,
@@ -444,17 +584,68 @@ function HomePage({
   const [heroIndex, setHeroIndex] = useState(0);
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const genres = [t.genres.action, t.genres.drama, t.genres.scifi, t.genres.horror, t.genres.comedy];
-  const heroSlides = MOVIES.slice(0, 4);
-  const hero = heroSlides[heroIndex];
-  const allContent: MovieData[] = [...MOVIES, ...TV_SERIES];
+  
+  const [heroData, setHeroData] = useState<HeroTitle[]>([]);
+  const [popularGenres, setPopularGenres] = useState<PopularGenre[]>([]);
+  const [topMovies, setTopMovies] = useState<TopMovie[]>([]);
+  const [topSeries, setTopSeries] = useState<TopSeries[]>([]);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [comingSoon, setComingSoon] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  // Auto-advance carousel
   useEffect(() => {
-    if (isPaused) return;
+    async function fetchHomepageData() {
+      setIsLoading(true);
+      setApiError(null);
+      try {
+        const hero = await getHero(4);
+        setHeroData(hero);
+        
+        const genres = await getPopularGenres(5);
+        setPopularGenres(genres);
+        
+        const movies = await getTopMovies(5);
+        setTopMovies(movies);
+        
+        const series = await getTopSeries(5);
+        setTopSeries(series);
+        
+        try {
+          const coming = await getComingSoon(5);
+          setComingSoon(coming);
+        } catch (err) {
+          console.log('Coming soon endpoint not available');
+          setComingSoon([]);
+        }
+        
+        if (isLoggedIn) {
+          try {
+            const recs = await getRecommendations(5);
+            setRecommendations(recs);
+          } catch (err) {
+            console.log('Recommendations not available:', err);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching homepage data:', error);
+        setApiError('خطا در دریافت اطلاعات از سرور');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchHomepageData();
+  }, [isLoggedIn]);
+
+  const heroSlides = heroData.map(convertHeroToMovieData);
+  const hero = heroSlides[heroIndex] || heroSlides[0];
+
+  useEffect(() => {
+    if (isPaused || heroSlides.length === 0) return;
     const interval = setInterval(() => {
       setHeroIndex((prev) => (prev + 1) % heroSlides.length);
-    }, 6000); // 6 seconds per slide
+    }, 6000);
     return () => clearInterval(interval);
   }, [isPaused, heroSlides.length]);
 
@@ -479,13 +670,13 @@ function HomePage({
   }
 
   const isFiltering = !!activeGenre || !!globalSearch.trim();
-  const filteredAll = filterContent(allContent);
-  const filteredMovies = filterContent(MOVIES);
-  const filteredTV = filterContent(TV_SERIES);
-  const filteredComingSoon = COMING_SOON.filter((m) =>
-    (!globalSearch.trim() || m.title.toLowerCase().includes(globalSearch.toLowerCase())) &&
-    (!activeGenre || m.genres.includes(activeGenre))
-  );
+  
+  const allContentFromAPI: MovieData[] = [
+    ...topMovies.map(convertTopMovieToMovieData),
+    ...topSeries.map(convertTopSeriesToMovieData),
+  ];
+  
+  const filteredAll = filterContent(allContentFromAPI);
 
   function handleGenre(g: string) {
     setActiveGenre(activeGenre === g ? null : g);
@@ -496,16 +687,37 @@ function HomePage({
     setGlobalSearch("");
   }
 
+  if (isLoading) {
+    return (
+      <div className="max-w-[1440px] mx-auto px-8 py-32 text-center">
+        <div className="inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+        <p className="text-white/40 mt-4">در حال بارگذاری...</p>
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="max-w-[1440px] mx-auto px-8 py-32 text-center">
+        <p className="text-red-500 mb-4">{apiError}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-semibold"
+        >
+          تلاش مجدد
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
-      {/* Hero Carousel — hidden while filtering */}
-      {!isFiltering && (
+      {!isFiltering && heroSlides.length > 0 && (
         <section
           className="relative h-[700px] overflow-hidden bg-background"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          {/* Slides Container — cinematic backdrop presentation */}
           <div className="absolute inset-0">
             {heroSlides.map((slide, i) => (
               <div
@@ -514,14 +726,12 @@ function HomePage({
                   i === heroIndex ? "opacity-100 z-10" : "opacity-0 z-0"
                 }`}
               >
-                {/* Blurred background fill */}
                 <img
                   src={slide.img.replace("w=400&h=600", "w=1440&h=700")}
                   alt=""
                   aria-hidden
                   className="w-full h-full object-cover scale-110 blur-2xl opacity-50"
                 />
-                {/* Main backdrop — wide, preserving composition */}
                 <img
                   src={slide.img.replace("w=400&h=600", "w=1440&h=700")}
                   alt={slide.title}
@@ -531,101 +741,92 @@ function HomePage({
             ))}
           </div>
 
-          {/* Persistent gradient overlays — always visible, never fade with slides */}
           <div className="absolute inset-0 z-20 pointer-events-none">
             <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-black/20" />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/50" />
           </div>
 
-          {/* Content Container — always visible, updates only on slide change */}
-          <div className="relative z-30 h-full max-w-[1440px] mx-auto px-8 flex items-center pb-24">
-            <div className="max-w-2xl space-y-5">
-              {/* Content Type Badge */}
-              <div>
-                <span className={`inline-block px-4 py-1.5 text-white text-sm font-bold rounded-lg uppercase tracking-wide ${
-                  hero.type === "TV"
-                    ? "bg-gradient-to-r from-blue-600 to-blue-700"
-                    : "bg-gradient-to-r from-primary to-accent"
-                }`}>
-                  {hero.type === "TV" ? t.common.tvSeries : t.common.movie}
-                </span>
-              </div>
-
-              {/* Persian Title */}
-              <h1
-                className="text-[46px] font-black text-white leading-tight tracking-tight"
-                style={{ fontFamily: "'Vazirmatn', sans-serif", textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
-              >
-                {hero.title}
-              </h1>
-
-              {/* English Title */}
-              <p className="text-white/55 text-lg font-light tracking-wide">
-                {hero.originalTitle}
-              </p>
-
-              {/* Metadata Row */}
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <Star size={16} fill="#FCD34D" className="text-amber-400" />
-                  <span className="text-amber-300 font-bold">{toPersianDigits(hero.rating.toFixed(1))}</span>
-                  <span className="text-white/40 text-sm">/۱۰</span>
+          {hero && (
+            <div className="relative z-30 h-full max-w-[1440px] mx-auto px-8 flex items-center pb-24">
+              <div className="max-w-2xl space-y-5">
+                <div>
+                  <span className={`inline-block px-4 py-1.5 text-white text-sm font-bold rounded-lg uppercase tracking-wide ${
+                    hero.type === "TV"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-700"
+                      : "bg-gradient-to-r from-primary to-accent"
+                  }`}>
+                    {hero.type === "TV" ? t.common.tvSeries : t.common.movie}
+                  </span>
                 </div>
-                <span className="text-white/30">•</span>
-                <div className="flex items-center gap-1.5 text-white/70">
-                  <Calendar size={14} />
-                  <span>{toPersianDigits(hero.year)}</span>
-                </div>
-                <span className="text-white/30">•</span>
-                <div className="flex items-center gap-1.5 text-white/70">
-                  <Clock size={14} />
-                  <span>{hero.duration}</span>
-                </div>
-                <span className="px-2 py-0.5 border border-white/30 text-white/60 text-xs rounded">{hero.age}</span>
-              </div>
 
-              {/* Genres */}
-              <div className="flex flex-wrap gap-2">
-                {hero.genres.slice(0, 4).map((g) => {
-                  const IconComponent = genreIcons[g];
-                  return (
-                    <span
-                      key={g}
-                      className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-br from-white/12 to-white/8 backdrop-blur-md border border-white/20 text-white/90 text-sm rounded-xl font-medium shadow-lg shadow-black/30 hover:from-primary/20 hover:to-accent/15 hover:border-primary/40 transition-all duration-300"
-                    >
-                      {IconComponent && (
-                        <IconComponent size={16} className="text-primary/90 drop-shadow-[0_0_6px_rgba(139,92,246,0.5)]" />
-                      )}
-                      {g}
-                    </span>
-                  );
-                })}
-              </div>
-
-              {/* Description */}
-              <p className="text-white/80 text-base leading-relaxed max-w-xl line-clamp-3">
-                {hero.summary}
-              </p>
-
-              {/* CTA Buttons */}
-              <div className="flex gap-4 pt-2">
-                <button
-                  onClick={() => setPage(hero.type === "TV" ? "tv" : "movie", hero)}
-                  className="px-8 py-3.5 bg-gradient-to-r from-primary to-accent text-white rounded-xl font-bold hover:opacity-90 active:scale-95 transition-all shadow-xl shadow-primary/30"
+                <h1
+                  className="text-[46px] font-black text-white leading-tight tracking-tight"
+                  style={{ fontFamily: "'Vazirmatn', sans-serif", textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
                 >
-                  {t.detail.viewDetails}
-                </button>
-                <button className="px-6 py-3.5 bg-white/10 border border-white/20 text-white rounded-xl font-semibold hover:bg-white/20 transition-all flex items-center gap-2">
-                  <Bookmark size={18} />
-                  {t.detail.save}
-                </button>
+                  {hero.title}
+                </h1>
+
+                <p className="text-white/55 text-lg font-light tracking-wide">
+                  {hero.originalTitle}
+                </p>
+
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Star size={16} fill="#FCD34D" className="text-amber-400" />
+                    <span className="text-amber-300 font-bold">{toPersianDigits(hero.rating.toFixed(1))}</span>
+                    <span className="text-white/40 text-sm">/۱۰</span>
+                  </div>
+                  <span className="text-white/30">•</span>
+                  <div className="flex items-center gap-1.5 text-white/70">
+                    <Calendar size={14} />
+                    <span>{toPersianDigits(hero.year)}</span>
+                  </div>
+                  <span className="text-white/30">•</span>
+                  <div className="flex items-center gap-1.5 text-white/70">
+                    <Clock size={14} />
+                    <span>{hero.duration}</span>
+                  </div>
+                  <span className="px-2 py-0.5 border border-white/30 text-white/60 text-xs rounded">{hero.age}</span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {hero.genres.slice(0, 4).map((g) => {
+                    const IconComponent = genreIcons[g];
+                    return (
+                      <span
+                        key={g}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-br from-white/12 to-white/8 backdrop-blur-md border border-white/20 text-white/90 text-sm rounded-xl font-medium shadow-lg shadow-black/30 hover:from-primary/20 hover:to-accent/15 hover:border-primary/40 transition-all duration-300"
+                      >
+                        {IconComponent && (
+                          <IconComponent size={16} className="text-primary/90 drop-shadow-[0_0_6px_rgba(139,92,246,0.5)]" />
+                        )}
+                        {g}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                <p className="text-white/80 text-base leading-relaxed max-w-xl line-clamp-3">
+                  {hero.summary}
+                </p>
+
+                <div className="flex gap-4 pt-2">
+                  <button
+                    onClick={() => setPage(hero.type === "TV" ? "tv" : "movie", hero)}
+                    className="px-8 py-3.5 bg-gradient-to-r from-primary to-accent text-white rounded-xl font-bold hover:opacity-90 active:scale-95 transition-all shadow-xl shadow-primary/30"
+                  >
+                    {t.detail.viewDetails}
+                  </button>
+                  <button className="px-6 py-3.5 bg-white/10 border border-white/20 text-white rounded-xl font-semibold hover:bg-white/20 transition-all flex items-center gap-2">
+                    <Bookmark size={18} />
+                    {t.detail.save}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Navigation Controls */}
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-40 flex items-center gap-8 bg-black/40 backdrop-blur-xl border border-white/20 rounded-full px-6 py-4 shadow-2xl">
-            {/* Previous Button */}
             <button
               onClick={prevSlide}
               className="p-2.5 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-primary/50 transition-all hover:scale-110 active:scale-95"
@@ -634,7 +835,6 @@ function HomePage({
               <ChevronRight size={22} strokeWidth={2.5} />
             </button>
 
-            {/* Pagination Dots */}
             <div className="flex items-center gap-3">
               {heroSlides.map((_, i) => (
                 <button
@@ -650,7 +850,6 @@ function HomePage({
               ))}
             </div>
 
-            {/* Next Button */}
             <button
               onClick={nextSlide}
               className="p-2.5 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-primary/50 transition-all hover:scale-110 active:scale-95"
@@ -663,7 +862,6 @@ function HomePage({
       )}
 
       <div className="max-w-[1440px] mx-auto px-8 py-14 space-y-16">
-        {/* Popular Genres */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-white tracking-wide uppercase" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>{t.home.popularGenres}</h2>
@@ -674,14 +872,18 @@ function HomePage({
             )}
           </div>
           <div className="flex gap-3 flex-wrap">
-            {genres.map((g) => (
-              <button key={g} onClick={() => handleGenre(g)}
+            {popularGenres.map((genre) => (
+              <button
+                key={genre.genre_id}
+                onClick={() => handleGenre(genre.genre_name)}
                 className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all border ${
-                  activeGenre === g
+                  activeGenre === genre.genre_name
                     ? "bg-primary border-primary text-white"
                     : "bg-transparent border-white/20 text-white/70 hover:border-white/40 hover:text-white"
-                }`}>
-                {g}
+                }`}
+              >
+                {genre.genre_name}
+                <span className="mr-2 text-xs opacity-60">({toPersianDigits(genre.title_count)})</span>
               </button>
             ))}
           </div>
@@ -718,81 +920,105 @@ function HomePage({
           </>
         ) : (
           <>
-            {/* Recommended — logged-in only */}
-            {isLoggedIn && (
+            {isLoggedIn && recommendations.length > 0 && (
               <section>
                 <SectionHeader title={t.home.recommendedForYou} />
                 <div className="flex gap-5 overflow-x-auto pb-4" style={{ scrollbarWidth: "none" }}>
-                  {MOVIES.slice(0, 5).map((m) => (
-                    <div key={m.id} className="flex-shrink-0 w-44">
-                      <MovieCard movie={m} onClick={() => setPage("movie", m)} showTypeBadge />
-                    </div>
-                  ))}
+                  {recommendations.map((rec) => {
+                    const movieData = convertRecommendationToMovieData(rec);
+                    return (
+                      <div key={movieData.id} className="flex-shrink-0 w-44">
+                        <MovieCard movie={movieData} onClick={() => setPage(movieData.type === "TV" ? "tv" : "movie", movieData)} showTypeBadge />
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}
 
-            {/* Top Rated Movies */}
             <section>
               <SectionHeader title={t.home.topRatedMovies} action={t.home.seeAll} onActionClick={() => setPage("browse")} />
               <div className="grid grid-cols-5 gap-5">
-                {MOVIES.slice(0, 5).map((m) => (
-                  <MovieCard key={m.id} movie={m} onClick={() => setPage("movie", m)} showTypeBadge />
-                ))}
-              </div>
-            </section>
-
-            {/* Top Rated Series */}
-            <section>
-              <SectionHeader title={t.home.topRatedSeries} action={t.home.seeAll} onActionClick={() => setPage("browse")} />
-              <div className="grid grid-cols-5 gap-5">
-                {TV_SERIES.map((m) => (
-                  <MovieCard key={m.id} movie={m} onClick={() => setPage("tv", m)} showTypeBadge />
-                ))}
-              </div>
-            </section>
-
-            {/* Coming Soon */}
-            <section>
-              <SectionHeader title={t.home.comingSoon} action={t.home.seeCalendar} onActionClick={() => setPage("browse")} />
-              <div className="grid grid-cols-5 gap-5">
-                {COMING_SOON.map((m) => {
-                  // For coming soon items, we need full movie data
-                  const allContent = [...MOVIES, ...TV_SERIES];
-                  const fullData = allContent.find(movie => movie.id === m.id) || {
-                    ...m,
-                    rating: 0,
-                    duration: "TBA",
-                    summary: "Coming soon...",
-                    age: "TBA",
-                    voteCount: 0
-                  } as MovieData;
+                {topMovies.map((movie) => {
+                  const movieData = convertTopMovieToMovieData(movie);
                   return (
-                  <div key={m.id} onClick={() => setPage(m.type === "TV" ? "tv" : "movie", fullData)}
-                    className="relative group rounded-xl overflow-hidden bg-card border border-white/10 dark:border-white/10 light:border-black/15 hover:border-white/25 dark:hover:border-white/25 light:hover:border-primary/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/40 dark:hover:shadow-black/40 light:hover:shadow-primary/15 cursor-pointer">
-                    <div className="relative aspect-[2/3] overflow-hidden">
-                      <img src={m.img} alt={m.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
-                      <div className="absolute top-3 left-3 flex gap-2">
-                        <span className="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded tracking-wider uppercase">{t.badges.comingSoon}</span>
-                        <span className={`px-2 py-0.5 text-white text-[9px] font-bold rounded uppercase tracking-wider ${m.type === "TV" ? "bg-blue-600/80" : "bg-purple-600/80"}`}>{m.type === "TV" ? t.common.tvSeries : t.common.movie}</span>
-                      </div>
-                      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-white/80 text-xs">
-                        <Calendar size={11} /><span>{m.releaseDate}</span>
-                      </div>
-                    </div>
-                    <div className="p-3">
-                      <h3 className="font-semibold text-foreground text-sm leading-tight mb-0.5 line-clamp-1">{m.title}</h3>
-                      <p className="text-white/35 dark:text-white/35 light:text-black/40 text-[11px] leading-tight mb-1.5 line-clamp-1 font-light">{m.originalTitle}</p>
-                      <div className="flex flex-wrap gap-1">
-                        {m.genres.map((g) => <span key={g} className="px-1.5 py-0.5 bg-white/8 dark:bg-white/8 light:bg-black/8 rounded text-white/50 dark:text-white/50 light:text-black/60 text-[10px]">{g}</span>)}
-                      </div>
-                    </div>
-                  </div>
-                );
+                    <MovieCard
+                      key={movieData.id}
+                      movie={movieData}
+                      onClick={() => setPage("movie", movieData)}
+                      showTypeBadge
+                    />
+                  );
                 })}
               </div>
             </section>
+
+            <section>
+              <SectionHeader title={t.home.topRatedSeries} action={t.home.seeAll} onActionClick={() => setPage("browse")} />
+              <div className="grid grid-cols-5 gap-5">
+                {topSeries.map((series) => {
+                  const seriesData = convertTopSeriesToMovieData(series);
+                  return (
+                    <MovieCard
+                      key={seriesData.id}
+                      movie={seriesData}
+                      onClick={() => setPage("tv", seriesData)}
+                      showTypeBadge
+                    />
+                  );
+                })}
+              </div>
+            </section>
+
+            {comingSoon.length > 0 && (
+              <section>
+                <SectionHeader title={t.home.comingSoon} action={t.home.seeCalendar} onActionClick={() => setPage("browse")} />
+                <div className="grid grid-cols-5 gap-5">
+                  {comingSoon.map((item) => {
+                    const movieData: MovieData = {
+                      id: item.title_id,
+                      title: item.name_fa,
+                      originalTitle: item.name_en,
+                      img: item.poster_url || '/placeholder.jpg',
+                      rating: 0,
+                      year: item.release_year,
+                      duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
+                                item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
+                      age: item.age_rating,
+                      summary: 'در حال آمدن...',
+                      genres: item.genres?.split(', ') || [],
+                      type: item.t_type === 'S' ? 'TV' : 'Movie',
+                      voteCount: 0,
+                      similarMovieIds: [],
+                      cast: [],
+                      crew: [],
+                      awards: [],
+                      reviews: [],
+                    };
+                    return (
+                      <div key={item.title_id} onClick={() => setPage(movieData.type === "TV" ? "tv" : "movie", movieData)}
+                        className="relative group rounded-xl overflow-hidden bg-card border border-white/10 dark:border-white/10 light:border-black/15 hover:border-white/25 dark:hover:border-white/25 light:hover:border-primary/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/40 dark:hover:shadow-black/40 light:hover:shadow-primary/15 cursor-pointer">
+                        <div className="relative aspect-[2/3] overflow-hidden">
+                          <img src={movieData.img} alt={movieData.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+                          <div className="absolute top-3 left-3 flex gap-2">
+                            <span className="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded tracking-wider uppercase">{t.badges.comingSoon}</span>
+                            <span className={`px-2 py-0.5 text-white text-[9px] font-bold rounded uppercase tracking-wider ${movieData.type === "TV" ? "bg-blue-600/80" : "bg-purple-600/80"}`}>{movieData.type === "TV" ? t.common.tvSeries : t.common.movie}</span>
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <h3 className="font-semibold text-foreground text-sm leading-tight mb-0.5 line-clamp-1">{movieData.title}</h3>
+                          <p className="text-white/35 dark:text-white/35 light:text-black/40 text-[11px] leading-tight mb-1.5 line-clamp-1 font-light">{movieData.originalTitle}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {movieData.genres.slice(0, 2).map((g) => <span key={g} className="px-1.5 py-0.5 bg-white/8 dark:bg-white/8 light:bg-black/8 rounded text-white/50 dark:text-white/50 light:text-black/60 text-[10px]">{g}</span>)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
           </>
         )}
       </div>
@@ -800,8 +1026,7 @@ function HomePage({
   );
 }
 
-
-// ── Page 3: Movie Detail ───────────────────────────────────────────────────────
+// ── Page 3: Movie Detail (با اتصال به API) ─────────────────────────────────────
 
 function MovieDetailPage({
   movie,
@@ -820,7 +1045,47 @@ function MovieDetailPage({
 }) {
   const [saved, setSaved] = useState(false);
   const [pendingScore, setPendingScore] = useState(0);
+  const [details, setDetails] = useState<TitleDetails | null>(null);
+  const [cast, setCast] = useState<CastMember[]>([]);
+  const [crew, setCrew] = useState<CrewMember[]>([]);
+  const [awards, setAwards] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [similarTitles, setSimilarTitles] = useState<SimilarTitle[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const existingRating = ratedTitles.find((r) => r.id === movie.id);
+
+  useEffect(() => {
+    async function fetchDetails() {
+      setIsLoading(true);
+      try {
+        const [detailsData, castData, crewData, awardsData, similarData] = await Promise.all([
+          getTitleDetails(movie.id),
+          getTitleCast(movie.id),
+          getTitleCrew(movie.id),
+          getTitleAwards(movie.id),
+          getSimilarTitles(movie.id, 10)
+        ]);
+        setDetails(detailsData);
+        setCast(castData);
+        setCrew(crewData);
+        setAwards(awardsData);
+        setSimilarTitles(similarData);
+        
+        try {
+          const reviewsData = await getTitleReviews(movie.id, 10);
+          setReviews(reviewsData);
+        } catch (err) {
+          console.log('Reviews endpoint error:', err);
+          setReviews([]);
+        }
+      } catch (error) {
+        console.error('Error fetching title details:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchDetails();
+  }, [movie.id]);
 
   function goToBrowseWithQuery(q: string) {
     setGlobalSearch(q);
@@ -840,21 +1105,21 @@ function MovieDetailPage({
     });
   }
 
-  const allContent = [...MOVIES, ...TV_SERIES];
-  const cast = movie.cast ?? [];
-  const crew = movie.crew ?? [];
-  const awards = movie.awards ?? [];
-  const reviews = movie.reviews ?? [];
-  const similarMovies = (movie.similarMovieIds ?? []).map((id) => allContent.find((m) => m.id === id)).filter(Boolean) as typeof MOVIES;
+  if (isLoading) {
+    return (
+      <div className="max-w-[1440px] mx-auto px-8 py-32 text-center">
+        <div className="inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+        <p className="text-white/40 mt-4">در حال بارگذاری...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-12">
-      {/* Back Button */}
       <div className="mb-6">
         <BackButton onClick={navigateBack} />
       </div>
 
-      {/* Header */}
       <div className="flex gap-10 mb-14">
         <div className="flex-shrink-0 w-60">
           <img
@@ -873,25 +1138,25 @@ function MovieDetailPage({
             className="text-[36px] font-bold text-white mb-2 leading-tight"
             style={{ fontFamily: "'Vazirmatn', sans-serif" }}
           >
-            {movie.title}
+            {details?.name_fa || movie.title}
           </h1>
-          <p className="text-white/35 text-base mb-5">{movie.originalTitle}</p>
+          <p className="text-white/35 text-base mb-5">{details?.name_en || movie.originalTitle}</p>
           <div className="flex flex-wrap items-center gap-3 mb-6">
             <div className="flex items-center gap-2">
-              <RatingDisplay rating={movie.rating} size="lg" />
+              <RatingDisplay rating={details?.score || movie.rating} size="lg" />
               <span className="text-white/40 text-sm">/{toPersianDigits(10)}</span>
-              <span className="text-white/35 text-sm">({formatPersianNumber(movie.voteCount || 0)} {t.common.votes})</span>
+              <span className="text-white/35 text-sm">({formatPersianNumber(details?.vote_count || movie.voteCount || 0)} {t.common.votes})</span>
             </div>
             <span className="text-white/20">·</span>
-            <span className="text-white/60 text-sm">{toPersianDigits(movie.year)}</span>
+            <span className="text-white/60 text-sm">{toPersianDigits(details?.release_date ? new Date(details.release_date).getFullYear() : movie.year)}</span>
             <span className="text-white/20">·</span>
-            <span className="border border-white/25 text-white/50 text-xs px-2 py-0.5 rounded">{movie.age}</span>
+            <span className="border border-white/25 text-white/50 text-xs px-2 py-0.5 rounded">{details?.age_rating || movie.age}</span>
             <span className="text-white/20">·</span>
             <span className="text-white/60 text-sm flex items-center gap-1.5">
-              <Clock size={13} /> {movie.duration}
+              <Clock size={13} /> {details?.duration_mins ? `${toPersianDigits(details.duration_mins)} دقیقه` : movie.duration}
             </span>
           </div>
-          <p className="text-white/60 text-sm leading-relaxed mb-8 max-w-2xl">{movie.summary}</p>
+          <p className="text-white/60 text-sm leading-relaxed mb-8 max-w-2xl">{details?.summary || movie.summary}</p>
           <div className="flex gap-3 flex-wrap items-center">
             <SaveButton saved={saved} onToggle={() => setSaved(!saved)} />
             {existingRating ? (
@@ -929,114 +1194,136 @@ function MovieDetailPage({
       </div>
 
       <div className="space-y-12">
-        {/* Cast */}
-        <section>
-          <SectionHeader title={t.detail.cast} />
-          <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
-            {cast.map((a) => (
-              <div key={a.name} onClick={() => goToBrowseWithQuery(a.name)} className="flex-shrink-0 w-[120px] text-center group cursor-pointer">
-                <div className="relative overflow-hidden rounded-xl mb-3 w-[120px] h-[120px] border border-white/10">
-                  <img
-                    src={a.img}
-                    alt={a.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-                <p className="text-white text-xs font-semibold leading-tight">{a.name}</p>
-                <p className="text-white/40 text-[11px] mt-0.5 leading-tight">{a.character}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Crew */}
-        <section>
-          <SectionHeader title={t.detail.crew} />
-          <div className="flex gap-3 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
-            {crew.map((c) => (
-              <div key={c.name} onClick={() => goToBrowseWithQuery(c.name)} className="flex-shrink-0 bg-[#1A1A1A] rounded-xl px-5 py-4 border border-white/8 hover:border-white/18 hover:bg-white/3 transition-colors min-w-[160px] cursor-pointer">
-                <p className="text-white text-sm font-semibold mb-1">{c.name}</p>
-                <p className="text-white/40 text-xs">{c.role}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Awards */}
-        <section>
-          <SectionHeader title={t.detail.awards} />
-          <div className="space-y-2.5">
-            {awards.map((a, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 bg-[#1A1A1A] rounded-xl px-5 py-3.5 border border-white/8 hover:border-white/15 transition-colors"
-              >
-                <span className="text-white/35 text-xs font-mono w-10 flex-shrink-0">{toPersianDigits(a.year)}</span>
-                <Award size={14} className={`flex-shrink-0 ${a.status === "won" ? "text-amber-400" : "text-white/20"}`} />
-                <span className="text-white/80 text-sm font-medium flex-shrink-0">{a.name}</span>
-                <span className="text-white/25 text-xs">—</span>
-                <span className="text-white/55 text-sm flex-1">{a.category}</span>
-                <span
-                  className={`flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    a.status === "won"
-                      ? "bg-amber-400/15 border border-amber-400/40 text-amber-400"
-                      : "bg-white/6 border border-white/15 text-white/35"
-                  }`}
-                >
-                  {a.status === "won" ? t.detail.won : t.detail.nominated}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Similar Titles */}
-        <section>
-          <SectionHeader title={t.detail.similarTitles} />
-          <div className="flex gap-4 overflow-x-auto pb-4" style={{ scrollbarWidth: "none" }}>
-            {similarMovies.map((m) => (
-              <div key={m.id} className="flex-shrink-0 w-40">
-                <MovieCard movie={m} onClick={() => setPage(m.type === "TV" ? "tv" : "movie", m)} />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* User Reviews */}
-        <section>
-          <SectionHeader title={t.detail.reviews} />
-          <div className="space-y-3">
-            {reviews.map((r) => (
-              <div
-                key={r.user}
-                className="flex items-center gap-6 bg-[#1A1A1A] rounded-xl px-6 py-4 border border-white/8 hover:border-white/15 transition-colors"
-              >
-                <div className="flex items-center gap-3 flex-shrink-0 w-44">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E50914]/40 to-[#E50914]/10 border border-primary/30 text-primary text-xs flex items-center justify-center font-bold flex-shrink-0">
-                    {r.user[0].toUpperCase()}
+        {cast.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.cast} />
+            <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
+              {cast.map((a) => (
+                <div key={a.person_id} onClick={() => goToBrowseWithQuery(a.name_fa)} className="flex-shrink-0 w-[120px] text-center group cursor-pointer">
+                  <div className="relative overflow-hidden rounded-xl mb-3 w-[120px] h-[120px] border border-white/10 bg-white/5">
+                    <img
+                      src={a.photo_url || '/placeholder.jpg'}
+                      alt={a.name_fa}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
                   </div>
-                  <span className="text-white text-sm font-medium">{r.user}</span>
+                  <p className="text-white text-xs font-semibold leading-tight">{a.name_fa}</p>
+                  <p className="text-white/40 text-[11px] mt-0.5 leading-tight">{a.character_name_fa}</p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <RatingDisplay rating={r.score} size="sm" />
-                  <span className="text-white/30 text-xs">/{toPersianDigits(10)}</span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {crew.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.crew} />
+            <div className="flex gap-3 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
+              {crew.map((c) => (
+                <div key={c.person_id} onClick={() => goToBrowseWithQuery(c.name_fa)} className="flex-shrink-0 bg-[#1A1A1A] rounded-xl px-5 py-4 border border-white/8 hover:border-white/18 hover:bg-white/3 transition-colors min-w-[160px] cursor-pointer">
+                  <p className="text-white text-sm font-semibold mb-1">{c.name_fa}</p>
+                  <p className="text-white/40 text-xs">{c.role_name}</p>
                 </div>
-                {r.spoiler && (
-                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold rounded uppercase tracking-wider">
-                    {t.detail.spoilerWarning}
+              ))}
+            </div>
+          </section>
+        )}
+
+        {awards.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.awards} />
+            <div className="space-y-2.5">
+              {awards.map((a, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 bg-[#1A1A1A] rounded-xl px-5 py-3.5 border border-white/8 hover:border-white/15 transition-colors"
+                >
+                  <span className="text-white/35 text-xs font-mono w-16 flex-shrink-0">{toPersianDigits(a.ceremony_year)}</span>
+                  <Award size={14} className={`flex-shrink-0 ${a.status === "won" ? "text-amber-400" : "text-white/20"}`} />
+                  <span className="text-white/80 text-sm font-medium flex-shrink-0">{a.award_name}</span>
+                  <span className="text-white/25 text-xs">—</span>
+                  <span className="text-white/55 text-sm flex-1">{a.category}</span>
+                  <span
+                    className={`flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      a.status === "won"
+                        ? "bg-amber-400/15 border border-amber-400/40 text-amber-400"
+                        : "bg-white/6 border border-white/15 text-white/35"
+                    }`}
+                  >
+                    {a.status === "won" ? t.detail.won : t.detail.nominated}
                   </span>
-                )}
-                <p className="text-white/50 text-sm leading-relaxed flex-1">{r.comment}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {similarTitles.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.similarTitles} />
+            <div className="flex gap-4 overflow-x-auto pb-4" style={{ scrollbarWidth: "none" }}>
+              {similarTitles.map((item, index) => {
+                const similarMovieData: MovieData = {
+                  id: item.title_id,
+                  title: item.name_fa,
+                  originalTitle: item.name_en,
+                  img: item.poster_url || '/placeholder.jpg',
+                  rating: item.score,
+                  year: item.release_year,
+                  duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
+                            item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
+                  age: item.age_rating,
+                  summary: '',
+                  genres: item.genres.split(', '),
+                  type: item.t_type === 'S' ? 'TV' : 'Movie',
+                  voteCount: 0,
+                  similarMovieIds: [],
+                  cast: [],
+                  crew: [],
+                  awards: [],
+                  reviews: [],
+                };
+                return (
+                  <div key={`similar-${item.title_id}-${index}`} className="flex-shrink-0 w-40">
+                    <MovieCard movie={similarMovieData} onClick={() => setPage(similarMovieData.type === "TV" ? "tv" : "movie", similarMovieData)} />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {reviews.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.reviews} />
+            <div className="space-y-3">
+              {reviews.map((r, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col gap-3 bg-[#1A1A1A] rounded-xl px-6 py-4 border border-white/8 hover:border-white/15 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E50914]/40 to-[#E50914]/10 border border-primary/30 text-primary text-xs flex items-center justify-center font-bold flex-shrink-0">
+                      {r.user?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                    <span className="text-white text-sm font-medium">{r.user || 'کاربر'}</span>
+                    <div className="flex items-center gap-1">
+                      <RatingDisplay rating={r.rating || 0} size="sm" />
+                      <span className="text-white/30 text-xs">/{toPersianDigits(10)}</span>
+                    </div>
+                  </div>
+                  <p className="text-white/50 text-sm leading-relaxed flex-1">{r.comment || r.review_text || 'نظری ثبت نشده است'}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Page 4: TV Series Detail ───────────────────────────────────────────────────
+// ── Page 4: TV Series Detail (با اتصال به API) ─────────────────────────────────
 
 function TVDetailPage({
   movie,
@@ -1054,10 +1341,60 @@ function TVDetailPage({
   setGlobalSearch: (q: string) => void;
 }) {
   const [saved, setSaved] = useState(false);
-  const [expandedSeason, setExpandedSeason] = useState<number | null>(1);
+  const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const [pendingScore, setPendingScore] = useState(0);
+  const [details, setDetails] = useState<TitleDetails | null>(null);
+  const [cast, setCast] = useState<CastMember[]>([]);
+  const [crew, setCrew] = useState<CrewMember[]>([]);
+  const [awards, setAwards] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [similarTitles, setSimilarTitles] = useState<SimilarTitle[]>([]);
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const tvShow = movie;
   const existingRating = ratedTitles.find((r) => r.id === tvShow.id);
+
+  useEffect(() => {
+    async function fetchDetails() {
+      setIsLoading(true);
+      try {
+        const [detailsData, castData, crewData, awardsData, similarData, seasonsData, episodesData] = await Promise.all([
+          getTitleDetails(tvShow.id),
+          getTitleCast(tvShow.id),
+          getTitleCrew(tvShow.id),
+          getTitleAwards(tvShow.id),
+          getSimilarTitles(tvShow.id, 10),
+          getSeasons(tvShow.id),
+          getEpisodes(tvShow.id)
+        ]);
+        setDetails(detailsData);
+        setCast(castData);
+        setCrew(crewData);
+        setAwards(awardsData);
+        setSimilarTitles(similarData);
+        setSeasons(seasonsData);
+        setEpisodes(episodesData);
+        
+        try {
+          const reviewsData = await getTitleReviews(tvShow.id, 10);
+          setReviews(reviewsData);
+        } catch (err) {
+          console.log('Reviews endpoint error:', err);
+          setReviews([]);
+        }
+        
+        if (seasonsData.length > 0) {
+          setExpandedSeason(seasonsData[0].season_number);
+        }
+      } catch (error) {
+        console.error('Error fetching TV details:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchDetails();
+  }, [tvShow.id]);
 
   function goToBrowseWithQuery(q: string) {
     setGlobalSearch(q);
@@ -1077,59 +1414,34 @@ function TVDetailPage({
     });
   }
 
-  const allContent = [...MOVIES, ...TV_SERIES];
-  const cast = tvShow.cast ?? [];
-  const crew = tvShow.crew ?? [];
-  const awards = tvShow.awards ?? [];
-  const reviews = tvShow.reviews ?? [];
-  const similarShows = (tvShow.similarMovieIds ?? []).map((id) => allContent.find((m) => m.id === id)).filter(Boolean) as typeof TV_SERIES;
-  const seasons = [
-    {
-      num: 1,
-      year: 2022,
-      episodes: [
-        { num: 1, title: "System", duration: "35m", releaseDate: "Jun 23, 2022", desc: "Carmen Berzatto returns to Chicago to run his late brother's sandwich shop after a tragedy." },
-        { num: 2, title: "Hands", duration: "32m", releaseDate: "Jun 23, 2022", desc: "The kitchen is under pressure as the crew adapts to Carmy's new management style." },
-        { num: 3, title: "Brigade", duration: "28m", releaseDate: "Jun 23, 2022", desc: "Carmy attempts to bring structure and order to the chaotic kitchen environment." },
-        { num: 4, title: "Dogs", duration: "30m", releaseDate: "Jun 23, 2022", desc: "Sydney's past catches up with her as tensions in the kitchen escalate to a breaking point." },
-        { num: 5, title: "Sheridan", duration: "29m", releaseDate: "Jun 23, 2022", desc: "A catastrophic day at The Beef pushes every member of the crew to their absolute limit." },
-      ],
-    },
-    {
-      num: 2,
-      year: 2023,
-      episodes: [
-        { num: 1, title: "Beef", duration: "38m", releaseDate: "Jun 22, 2023", desc: "The crew prepares for the opening of their new restaurant as tensions reach an all-time high." },
-        { num: 2, title: "Pasta", duration: "28m", releaseDate: "Jun 22, 2023", desc: "Sydney experiments with new dishes while managing the chaos of opening night preparations." },
-        { num: 3, title: "Sundae", duration: "32m", releaseDate: "Jun 22, 2023", desc: "Marcus travels to Copenhagen for a culinary experience that changes his perspective." },
-        { num: 4, title: "Honeydew", duration: "30m", releaseDate: "Jun 22, 2023", desc: "Marcus continues his journey abroad while the team faces challenges back home." },
-        { num: 5, title: "Pop", duration: "34m", releaseDate: "Jun 22, 2023", desc: "A pivotal family flashback reshapes everything we understand about Carmy and his brother." },
-      ],
-    },
-    {
-      num: 3,
-      year: 2024,
-      episodes: [
-        { num: 1, title: "Career Day", duration: "30m", releaseDate: "Jun 27, 2024", desc: "The restaurant opens to the public as the team braces for the first real dinner service." },
-        { num: 2, title: "Napkins", duration: "28m", releaseDate: "Jun 27, 2024", desc: "Small disasters compound as the kitchen finds its rhythm under mounting expectations." },
-        { num: 3, title: "Doors", duration: "33m", releaseDate: "Jun 27, 2024", desc: "Sydney faces a critical decision about her future, weighing loyalty against ambition." },
-      ],
-    },
-  ];
+  const episodesBySeason = episodes.reduce((acc, episode) => {
+    if (!acc[episode.season_number]) {
+      acc[episode.season_number] = [];
+    }
+    acc[episode.season_number].push(episode);
+    return acc;
+  }, {} as Record<number, Episode[]>);
+
+  if (isLoading) {
+    return (
+      <div className="max-w-[1440px] mx-auto px-8 py-32 text-center">
+        <div className="inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+        <p className="text-white/40 mt-4">در حال بارگذاری...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-12">
-      {/* Back Button */}
       <div className="mb-6">
         <BackButton onClick={navigateBack} />
       </div>
 
-      {/* Header */}
       <div className="flex gap-10 mb-14">
         <div className="flex-shrink-0 w-60">
           <img
-            src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=600&fit=crop&auto=format"
-            alt="The Bear"
+            src={tvShow.img}
+            alt={tvShow.title}
             className="w-full rounded-2xl border border-white/10 shadow-2xl shadow-black"
           />
         </div>
@@ -1138,7 +1450,7 @@ function TVDetailPage({
             <span className="px-3 py-1 border border-primary/50 text-primary text-xs font-bold rounded uppercase tracking-wider">
               {t.common.tvSeries}
             </span>
-            {[t.genres.drama, t.genres.comedy].map((g) => (
+            {tvShow.genres.map((g) => (
               <GenrePill key={g} genre={g} onClick={() => goToBrowseWithQuery(g)} />
             ))}
           </div>
@@ -1146,30 +1458,34 @@ function TVDetailPage({
             className="text-[36px] font-bold text-white dark:text-white light:text-black mb-2 leading-tight"
             style={{ fontFamily: "'Vazirmatn', sans-serif" }}
           >
-            {tvShow.title}
+            {details?.name_fa || tvShow.title}
           </h1>
-          <p className="text-white/35 dark:text-white/35 light:text-black/35 text-base mb-5">{tvShow.originalTitle}</p>
+          <p className="text-white/35 dark:text-white/35 light:text-black/35 text-base mb-5">{details?.name_en || tvShow.originalTitle}</p>
           <div className="flex flex-wrap items-center gap-3 mb-6 mt-4">
             <div className="flex items-center gap-2">
-              <RatingDisplay rating={tvShow.rating} size="lg" />
+              <RatingDisplay rating={details?.score || tvShow.rating} size="lg" />
               <span className="text-white/40 dark:text-white/40 light:text-black/40 text-sm">/{toPersianDigits(10)}</span>
-              <span className="text-white/35 dark:text-white/35 light:text-black/35 text-sm">({formatPersianNumber(tvShow.voteCount || 0)} {t.common.votes})</span>
+              <span className="text-white/35 dark:text-white/35 light:text-black/35 text-sm">({formatPersianNumber(details?.vote_count || tvShow.voteCount || 0)} {t.common.votes})</span>
             </div>
             <span className="text-white/20 dark:text-white/20 light:text-black/20">·</span>
             <span className="text-white/60 dark:text-white/60 light:text-black/60 text-sm flex items-center gap-1.5">
-              <Calendar size={13} /> {toPersianDigits("2022")}–{toPersianDigits("2024")}
+              {toPersianDigits(details?.release_date ? new Date(details.release_date).getFullYear().toString() : tvShow.year.toString())}{details?.end_date ? `–${toPersianDigits(new Date(details.end_date).getFullYear().toString())}` : ''}
             </span>
             <span className="text-white/20 dark:text-white/20 light:text-black/20">·</span>
-            <span className="border border-white/25 dark:border-white/25 light:border-black/25 text-white/50 dark:text-white/50 light:text-black/50 text-xs px-2 py-0.5 rounded">{tvShow.age}</span>
+            <span className="border border-white/25 dark:border-white/25 light:border-black/25 text-white/50 dark:text-white/50 light:text-black/50 text-xs px-2 py-0.5 rounded">{details?.age_rating || tvShow.age}</span>
             <span className="text-white/20 dark:text-white/20 light:text-black/20">·</span>
             <span className="text-white/60 dark:text-white/60 light:text-black/60 text-sm flex items-center gap-1.5">
-              <Clock size={13} /> {toPersianDigits(30)} دقیقه / {t.detail.episode}
+              <Clock size={13} /> {details?.total_episodes ? `${toPersianDigits(details.total_episodes)} قسمت` : tvShow.duration}
             </span>
-            <span className="text-white/20 dark:text-white/20 light:text-black/20">·</span>
-            <span className="text-white/50 dark:text-white/50 light:text-black/50 text-sm">{toPersianDigits(3)} فصل</span>
+            {details?.total_seasons && (
+              <>
+                <span className="text-white/20 dark:text-white/20 light:text-black/20">·</span>
+                <span className="text-white/60 dark:text-white/60 light:text-black/60 text-sm">{toPersianDigits(details.total_seasons)} فصل</span>
+              </>
+            )}
           </div>
           <p className="text-white/60 dark:text-white/60 light:text-black/60 text-sm leading-relaxed mb-8 max-w-2xl">
-            {tvShow.summary}
+            {details?.summary || tvShow.summary}
           </p>
           <div className="flex gap-3 flex-wrap items-center">
             <SaveButton saved={saved} onToggle={() => setSaved(!saved)} />
@@ -1208,172 +1524,204 @@ function TVDetailPage({
       </div>
 
       <div className="space-y-12">
-        {/* Cast */}
-        <section>
-          <SectionHeader title={t.detail.cast} />
-          <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
-            {cast.map((a) => (
-              <div key={a.name} onClick={() => goToBrowseWithQuery(a.name)} className="flex-shrink-0 w-[120px] text-center group cursor-pointer">
-                <div className="relative overflow-hidden rounded-xl mb-3 w-[120px] h-[120px] border border-white/10">
-                  <img
-                    src={a.img}
-                    alt={a.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-                <p className="text-white text-xs font-semibold leading-tight">{a.name}</p>
-                <p className="text-white/40 text-[11px] mt-0.5 leading-tight">{a.character}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Crew */}
-        <section>
-          <SectionHeader title={t.detail.crew} />
-          <div className="flex gap-3 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
-            {crew.map((c) => (
-              <div key={c.name} onClick={() => goToBrowseWithQuery(c.name)} className="flex-shrink-0 bg-[#1A1A1A] rounded-xl px-5 py-4 border border-white/8 hover:border-white/18 hover:bg-white/3 transition-colors min-w-[170px] cursor-pointer">
-                <p className="text-white text-sm font-semibold mb-1">{c.name}</p>
-                <p className="text-white/40 text-xs">{c.role}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Awards */}
-        <section>
-          <SectionHeader title={t.detail.awards} />
-          <div className="space-y-2.5">
-            {awards.map((a, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 bg-[#1A1A1A] rounded-xl px-5 py-3.5 border border-white/8 hover:border-white/15 transition-colors"
-              >
-                <span className="text-white/35 text-xs font-mono w-10 flex-shrink-0">{toPersianDigits(a.year)}</span>
-                <Award size={14} className={`flex-shrink-0 ${a.status === "won" ? "text-amber-400" : "text-white/20"}`} />
-                <span className="text-white/80 text-sm font-medium flex-shrink-0">{a.name}</span>
-                <span className="text-white/25 text-xs">—</span>
-                <span className="text-white/55 text-sm flex-1">{a.category}</span>
-                <span
-                  className={`flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    a.status === "won"
-                      ? "bg-amber-400/15 border border-amber-400/40 text-amber-400"
-                      : "bg-white/6 border border-white/15 text-white/35"
-                  }`}
-                >
-                  {a.status === "won" ? t.detail.won : t.detail.nominated}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Seasons & Episodes */}
-        <section>
-          <SectionHeader title={t.detail.seasonsAndEpisodes} />
-          <div className="space-y-2.5">
-            {seasons.map((season) => (
-              <div key={season.num} className="bg-card rounded-2xl border border-white/8 dark:border-white/8 light:border-black/8 overflow-hidden">
-                <button
-                  onClick={() => setExpandedSeason(expandedSeason === season.num ? null : season.num)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/3 dark:hover:bg-white/3 light:hover:bg-black/3 transition-colors group"
-                >
-                  <div className="flex items-center gap-4">
-                    <span
-                      className="text-white dark:text-white light:text-black font-bold"
-                      style={{ fontFamily: "'Vazirmatn', sans-serif" }}
-                    >
-                      {t.detail.season} {toPersianDigits(season.num)}
-                    </span>
-                    <span className="px-2 py-0.5 bg-white/8 dark:bg-white/8 light:bg-black/8 border border-white/10 dark:border-white/10 light:border-black/10 text-white/45 dark:text-white/45 light:text-black/45 text-xs rounded font-mono">{toPersianDigits(season.year)}</span>
-                    <span className="text-white/30 dark:text-white/30 light:text-black/30 text-sm">{toPersianDigits(season.episodes.length)} {t.detail.episodes}</span>
+        {cast.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.cast} />
+            <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
+              {cast.map((a) => (
+                <div key={a.person_id} onClick={() => goToBrowseWithQuery(a.name_fa)} className="flex-shrink-0 w-[120px] text-center group cursor-pointer">
+                  <div className="relative overflow-hidden rounded-xl mb-3 w-[120px] h-[120px] border border-white/10 bg-white/5">
+                    <img
+                      src={a.photo_url || '/placeholder.jpg'}
+                      alt={a.name_fa}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
                   </div>
-                  <ChevronDown
-                    size={16}
-                    className={`text-white/30 dark:text-white/30 light:text-black/30 group-hover:text-white/60 dark:group-hover:text-white/60 light:group-hover:text-black/60 transition-all duration-200 ${
-                      expandedSeason === season.num ? "rotate-180" : ""
+                  <p className="text-white text-xs font-semibold leading-tight">{a.name_fa}</p>
+                  <p className="text-white/40 text-[11px] mt-0.5 leading-tight">{a.character_name_fa}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {crew.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.crew} />
+            <div className="flex gap-3 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
+              {crew.map((c) => (
+                <div key={c.person_id} onClick={() => goToBrowseWithQuery(c.name_fa)} className="flex-shrink-0 bg-[#1A1A1A] rounded-xl px-5 py-4 border border-white/8 hover:border-white/18 hover:bg-white/3 transition-colors min-w-[170px] cursor-pointer">
+                  <p className="text-white text-sm font-semibold mb-1">{c.name_fa}</p>
+                  <p className="text-white/40 text-xs">{c.role_name}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {awards.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.awards} />
+            <div className="space-y-2.5">
+              {awards.map((a, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 bg-[#1A1A1A] rounded-xl px-5 py-3.5 border border-white/8 hover:border-white/15 transition-colors"
+                >
+                  <span className="text-white/35 text-xs font-mono w-16 flex-shrink-0">{toPersianDigits(a.ceremony_year)}</span>
+                  <Award size={14} className={`flex-shrink-0 ${a.status === "won" ? "text-amber-400" : "text-white/20"}`} />
+                  <span className="text-white/80 text-sm font-medium flex-shrink-0">{a.award_name}</span>
+                  <span className="text-white/25 text-xs">—</span>
+                  <span className="text-white/55 text-sm flex-1">{a.category}</span>
+                  <span
+                    className={`flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      a.status === "won"
+                        ? "bg-amber-400/15 border border-amber-400/40 text-amber-400"
+                        : "bg-white/6 border border-white/15 text-white/35"
                     }`}
-                  />
-                </button>
-                {expandedSeason === season.num && (
-                  <div className="border-t border-white/6 dark:border-white/6 light:border-black/6 divide-y divide-white/5 dark:divide-white/5 light:divide-black/5">
-                    {season.episodes.map((ep) => (
-                      <div
-                        key={ep.num}
-                        className="flex items-start gap-5 px-6 py-4 hover:bg-white/2 dark:hover:bg-white/2 light:hover:bg-black/2 transition-colors"
-                      >
-                        <span className="text-white/25 dark:text-white/25 light:text-black/25 text-xs font-mono w-8 flex-shrink-0 mt-0.5 text-center">
-                          {toPersianDigits(ep.num)}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-1.5">
-                            <p className="text-white dark:text-white light:text-black text-sm font-medium">{ep.title}</p>
-                            <span className="text-white/25 dark:text-white/25 light:text-black/25 text-xs flex items-center gap-1">
-                              <Clock size={10} /> {ep.duration}
-                            </span>
-                            <span className="text-white/20 dark:text-white/20 light:text-black/20 text-xs flex items-center gap-1">
-                              <Calendar size={10} /> {ep.releaseDate}
-                            </span>
-                          </div>
-                          <p className="text-white/40 dark:text-white/40 light:text-black/40 text-xs leading-relaxed">{ep.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Similar */}
-        <section>
-          <SectionHeader title={t.detail.similarTitles} />
-          <div className="flex gap-4 overflow-x-auto pb-4" style={{ scrollbarWidth: "none" }}>
-            {similarShows.map((m) => (
-              <div key={m.id} className="flex-shrink-0 w-40">
-                <MovieCard movie={m} onClick={() => setPage(m.type === "TV" ? "tv" : "movie", m)} />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* User Reviews */}
-        <section>
-          <SectionHeader title={t.detail.reviews} />
-          <div className="space-y-3">
-            {reviews.map((r) => (
-              <div
-                key={r.user}
-                className="flex items-center gap-6 bg-[#1A1A1A] rounded-xl px-6 py-4 border border-white/8 hover:border-white/15 transition-colors"
-              >
-                <div className="flex items-center gap-3 flex-shrink-0 w-44">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E50914]/40 to-[#E50914]/10 border border-primary/30 text-primary text-xs flex items-center justify-center font-bold flex-shrink-0">
-                    {r.user[0].toUpperCase()}
-                  </div>
-                  <span className="text-white text-sm font-medium">{r.user}</span>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <RatingDisplay rating={r.score} size="sm" />
-                  <span className="text-white/30 text-xs">/{toPersianDigits(10)}</span>
-                </div>
-                {r.spoiler && (
-                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold rounded uppercase tracking-wider">
-                    {t.detail.spoilerWarning}
+                  >
+                    {a.status === "won" ? t.detail.won : t.detail.nominated}
                   </span>
-                )}
-                <p className="text-white/50 text-sm leading-relaxed flex-1">{r.comment}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {seasons.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.seasonsAndEpisodes} />
+            <div className="space-y-2.5">
+              {seasons.map((season) => {
+                const seasonEpisodes = episodesBySeason[season.season_number] || [];
+                return (
+                  <div key={`season-list-${season.season_number}`} className="bg-card rounded-2xl border border-white/8 dark:border-white/8 light:border-black/8 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedSeason(expandedSeason === season.season_number ? null : season.season_number)}
+                      className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/3 dark:hover:bg-white/3 light:hover:bg-black/3 transition-colors group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <span
+                          className="text-white dark:text-white light:text-black font-bold"
+                          style={{ fontFamily: "'Vazirmatn', sans-serif" }}
+                        >
+                          {t.detail.season} {toPersianDigits(season.season_number)}
+                        </span>
+                        <span className="px-2 py-0.5 bg-white/8 dark:bg-white/8 light:bg-black/8 border border-white/10 dark:border-white/10 light:border-black/10 text-white/45 dark:text-white/45 light:text-black/45 text-xs rounded font-mono">
+                          {toPersianDigits(new Date(season.season_release_date).getFullYear())}
+                        </span>
+                        <span className="text-white/30 dark:text-white/30 light:text-black/30 text-sm">{toPersianDigits(season.total_episodes)} {t.detail.episodes}</span>
+                      </div>
+                      <ChevronDown
+                        size={16}
+                        className={`text-white/30 dark:text-white/30 light:text-black/30 group-hover:text-white/60 dark:group-hover:text-white/60 light:group-hover:text-black/60 transition-all duration-200 ${
+                          expandedSeason === season.season_number ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {expandedSeason === season.season_number && (
+                      <div className="border-t border-white/6 dark:border-white/6 light:border-black/6 divide-y divide-white/5 dark:divide-white/5 light:divide-black/5">
+                        {seasonEpisodes.map((ep) => (
+                          <div
+                            key={`season-${ep.season_number}-ep-${ep.episode_number}`}
+                            className="flex items-start gap-5 px-6 py-4 hover:bg-white/2 dark:hover:bg-white/2 light:hover:bg-black/2 transition-colors"
+                          >
+                            <span className="text-white/25 dark:text-white/25 light:text-black/25 text-xs font-mono w-12 flex-shrink-0 mt-0.5 text-center">
+                              {toPersianDigits(ep.episode_number)}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                                <p className="text-white dark:text-white light:text-black text-sm font-medium">{ep.episode_name_fa}</p>
+                                <span className="text-white/25 dark:text-white/25 light:text-black/25 text-xs flex items-center gap-1">
+                                  <Clock size={10} /> {ep.episode_duration} دقیقه
+                                </span>
+                                <span className="text-white/20 dark:text-white/20 light:text-black/20 text-xs flex items-center gap-1">
+                                  <Calendar size={10} /> {new Date(ep.episode_release_date).toLocaleDateString('fa-IR')}
+                                </span>
+                              </div>
+                              {ep.episode_summary && (
+                                <p className="text-white/40 dark:text-white/40 light:text-black/40 text-xs leading-relaxed line-clamp-2">{ep.episode_summary}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {similarTitles.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.similarTitles} />
+            <div className="flex gap-4 overflow-x-auto pb-4" style={{ scrollbarWidth: "none" }}>
+              {similarTitles.map((item, index) => {
+                const similarMovieData: MovieData = {
+                  id: item.title_id,
+                  title: item.name_fa,
+                  originalTitle: item.name_en,
+                  img: item.poster_url || '/placeholder.jpg',
+                  rating: item.score,
+                  year: item.release_year,
+                  duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
+                            item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
+                  age: item.age_rating,
+                  summary: '',
+                  genres: item.genres.split(', '),
+                  type: item.t_type === 'S' ? 'TV' : 'Movie',
+                  voteCount: 0,
+                  similarMovieIds: [],
+                  cast: [],
+                  crew: [],
+                  awards: [],
+                  reviews: [],
+                };
+                return (
+                  <div key={`similar-${item.title_id}-${index}`} className="flex-shrink-0 w-40">
+                    <MovieCard movie={similarMovieData} onClick={() => setPage(similarMovieData.type === "TV" ? "tv" : "movie", similarMovieData)} />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {reviews.length > 0 && (
+          <section>
+            <SectionHeader title={t.detail.reviews} />
+            <div className="space-y-3">
+              {reviews.map((r, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col gap-3 bg-[#1A1A1A] rounded-xl px-6 py-4 border border-white/8 hover:border-white/15 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E50914]/40 to-[#E50914]/10 border border-primary/30 text-primary text-xs flex items-center justify-center font-bold flex-shrink-0">
+                      {r.user?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                    <span className="text-white text-sm font-medium">{r.user || 'کاربر'}</span>
+                    <div className="flex items-center gap-1">
+                      <RatingDisplay rating={r.rating || 0} size="sm" />
+                      <span className="text-white/30 text-xs">/{toPersianDigits(10)}</span>
+                    </div>
+                  </div>
+                  <p className="text-white/50 text-sm leading-relaxed flex-1">{r.comment || r.review_text || 'نظری ثبت نشده است'}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Page 5: Browse ─────────────────────────────────────────────────────────────
+// ── Page 5: Browse (با اتصال به API جستجو) ─────────────────────────────────────
+
+// ── Page 5: Browse (با اتصال به API جستجو) ─────────────────────────────────────
 
 function BrowsePage({
   setPage,
@@ -1386,65 +1734,115 @@ function BrowsePage({
 }) {
   const [search, setSearch] = useState(globalSearch);
   const [tab, setTab] = useState<"all" | "movies" | "tv">("all");
-
-  useEffect(() => {
-    setSearch(globalSearch);
-  }, [globalSearch]);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [minRating, setMinRating] = useState<number>(0);
   const [yearRange, setYearRange] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("popularity");
+  const [sortBy, setSortBy] = useState<string>("score_desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [showRatingDropdown, setShowRatingDropdown] = useState(false);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
+  
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [totalResults, setTotalResults] = useState(0);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const allGenres = ["اکشن", "درام", "علمی-تخیلی", "ترسناک", "کمدی", "فانتزی", "جنایی", "تاریخی", "عاشقانه", "جنگی", "هیجان‌انگیز", "ماجراجویی", "معمایی", "خانوادگی"];
-  const allContent = [...MOVIES, ...TV_SERIES];
-
-  // Filter logic
-  let filteredResults = allContent.filter(item => {
-    // Tab filter
-    if (tab === "movies" && item.type !== "Movie") return false;
-    if (tab === "tv" && item.type !== "TV") return false;
-
-    // Search filter
-    if (search && !item.title.toLowerCase().includes(search.toLowerCase())) return false;
-
-    // Genre filter
-    if (selectedGenres.length > 0 && !selectedGenres.some(g => item.genres.includes(g))) return false;
-
-    // Rating filter
-    if (minRating > 0 && item.rating < minRating) return false;
-
-    // Year filter
-    if (yearRange === "2024") {
-      if (item.year !== 2024) return false;
-    } else if (yearRange === "2023") {
-      if (item.year !== 2023) return false;
-    } else if (yearRange === "2022-2023") {
-      if (item.year < 2022 || item.year > 2023) return false;
-    } else if (yearRange === "2020-2021") {
-      if (item.year < 2020 || item.year > 2021) return false;
+  
+  const genreNameToId: Record<string, number> = {
+    "اکشن": 1,
+    "درام": 2,
+    "علمی-تخیلی": 3,
+    "ترسناک": 4,
+    "کمدی": 5,
+    "فانتزی": 6,
+    "جنایی": 7,
+    "تاریخی": 8,
+    "عاشقانه": 9,
+    "جنگی": 10,
+    "هیجان‌انگیز": 11,
+    "ماجراجویی": 12,
+    "معمایی": 13,
+    "خانوادگی": 14,
+  };
+  
+  // تابع جستجو
+  const performSearch = async () => {
+    setIsSearching(true);
+    setHasSearched(true);
+    try {
+      const mediaType: "M" | "S" | undefined = tab === "movies" ? "M" : tab === "tv" ? "S" : undefined;
+      
+      const sortMap: Record<string, string> = {
+        popularity: "score_desc",
+        rating: "score_desc",
+        year_desc: "year_desc",
+        year_asc: "year_asc",
+        title_asc: "title_asc",
+        title_desc: "title_desc",
+        score_desc: "score_desc"
+      };
+      
+      let minYear: number | undefined = undefined;
+      let maxYear: number | undefined = undefined;
+      
+      if (yearRange === "2024") {
+        minYear = 2024;
+        maxYear = 2024;
+      } else if (yearRange === "2023") {
+        minYear = 2023;
+        maxYear = 2023;
+      } else if (yearRange === "2022-2023") {
+        minYear = 2022;
+        maxYear = 2023;
+      } else if (yearRange === "2020-2021") {
+        minYear = 2020;
+        maxYear = 2021;
+      }
+      
+      const genreIds = selectedGenres.map(g => genreNameToId[g]).filter(id => id !== undefined);
+      
+      const params: SearchParams = {
+        search_text: search || undefined,
+        media_type: mediaType,
+        genre_ids: genreIds.length > 0 ? genreIds : undefined,
+        min_year: minYear,
+        max_year: maxYear,
+        min_score: minRating > 0 ? minRating : undefined,
+        sort_by: (sortMap[sortBy] as any) || "score_desc",
+        limit: 20,
+        offset: (currentPage - 1) * 20
+      };
+      
+      console.log('Search params:', params);
+      
+      const results = await searchTitles(params);
+      setSearchResults(results);
+      setTotalResults(results.length > 0 ? results[0].total_count : 0);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+      setTotalResults(0);
+    } finally {
+      setIsSearching(false);
     }
+  };
+  
+  // جستجو هنگام تغییر فیلترها
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      performSearch();
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [search, tab, selectedGenres, minRating, yearRange, sortBy, currentPage]);
 
-    return true;
-  });
-
-  // Sort logic
-  if (sortBy === "rating") {
-    filteredResults = [...filteredResults].sort((a, b) => b.rating - a.rating);
-  } else if (sortBy === "year") {
-    filteredResults = [...filteredResults].sort((a, b) => b.year - a.year);
-  } else if (sortBy === "title") {
-    filteredResults = [...filteredResults].sort((a, b) => a.title.localeCompare(b.title));
-  }
-
-  const ITEMS_PER_PAGE = 8;
-  const totalPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
-  const paginatedResults = filteredResults.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
+  const ITEMS_PER_PAGE = 20;
+  const totalPages = Math.ceil(totalResults / ITEMS_PER_PAGE);
+  const paginatedResults = searchResults;
+  
   const pageNums: (number | "...")[] = [];
   if (totalPages <= 6) {
     for (let i = 1; i <= totalPages; i++) pageNums.push(i);
@@ -1463,7 +1861,7 @@ function BrowsePage({
     setSelectedGenres([]);
     setMinRating(0);
     setYearRange("all");
-    setSortBy("popularity");
+    setSortBy("score_desc");
     setSearch("");
     setGlobalSearch("");
     setCurrentPage(1);
@@ -1480,18 +1878,17 @@ function BrowsePage({
         {t.browse.browseDiscover}
       </h1>
 
-      {/* Search */}
       <div className="relative mb-6">
         <Search size={17} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/35 dark:text-white/35 light:text-black/35" />
         <input
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setGlobalSearch(e.target.value); }}
+          onChange={(e) => { setSearch(e.target.value); setGlobalSearch(e.target.value); setCurrentPage(1); }}
           placeholder={t.browse.searchPlaceholder}
           className="w-full bg-card border border-white/10 dark:border-white/10 light:border-black/10 rounded-xl pr-12 pl-12 py-4 text-foreground placeholder:text-white/25 dark:placeholder:text-white/25 light:placeholder:text-black/25 text-sm focus:outline-none focus:border-primary/40 transition-colors"
         />
         {search && (
           <button
-            onClick={() => { setSearch(""); setGlobalSearch(""); }}
+            onClick={() => { setSearch(""); setGlobalSearch(""); setCurrentPage(1); }}
             className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 dark:text-white/30 light:text-black/30 hover:text-white/60 dark:hover:text-white/60 light:hover:text-black/60 transition-colors"
           >
             <X size={15} />
@@ -1499,12 +1896,11 @@ function BrowsePage({
         )}
       </div>
 
-      {/* Media Tabs */}
       <div className="flex gap-1 mb-6 bg-card border border-white/8 dark:border-white/8 light:border-black/8 rounded-xl p-1 w-fit">
         {(["all", "movies", "tv"] as const).map((tabType) => (
           <button
             key={tabType}
-            onClick={() => setTab(tabType)}
+            onClick={() => { setTab(tabType); setCurrentPage(1); }}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === tabType
                 ? "bg-primary text-white shadow-lg shadow-[#E50914]/20"
@@ -1516,9 +1912,8 @@ function BrowsePage({
         ))}
       </div>
 
-      {/* Filter Row */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">
-        {/* Genre Filter */}
+        {/* دکمه ژانر */}
         <div className="relative">
           <button
             onClick={() => setShowGenreDropdown(!showGenreDropdown)}
@@ -1528,43 +1923,63 @@ function BrowsePage({
             <ChevronDown size={13} className="text-white/30 dark:text-white/30 light:text-black/30" />
           </button>
           {showGenreDropdown && (
-            <div className="absolute top-full mt-2 bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-xl p-3 z-50 min-w-[200px] shadow-2xl">
-              <div className="flex flex-wrap gap-2">
+            <div className="absolute top-full mt-2 bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-xl p-3 z-50 min-w-[280px] shadow-2xl">
+              <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto p-2">
                 {allGenres.map(g => (
-                  <GenrePill key={g} genre={g} active={selectedGenres.includes(g)} onClick={() => toggleGenre(g)} />
+                  <button
+                    key={g}
+                    onClick={() => toggleGenre(g)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      selectedGenres.includes(g)
+                        ? "bg-primary text-white"
+                        : "bg-white/10 text-white/70 hover:bg-white/20"
+                    }`}
+                  >
+                    {g}
+                  </button>
                 ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* Year Range Filter */}
+        {/* دکمه سال */}
         <div className="relative">
           <button
             onClick={() => setShowYearDropdown(!showYearDropdown)}
             className="flex items-center gap-2 bg-card border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-2.5 hover:border-white/20 dark:hover:border-white/20 light:hover:border-black/20 transition-colors"
           >
             <span className="text-white/60 dark:text-white/60 light:text-black/60 text-sm">
-              {yearRange === "all" ? t.browse.yearRange : yearRange === "2024" ? toPersianDigits("2024") : yearRange === "2023" ? toPersianDigits("2023") : yearRange === "2022-2023" ? `${toPersianDigits("2022")}-${toPersianDigits("2023")}` : `${toPersianDigits("2020")}-${toPersianDigits("2021")}`}
+              {yearRange === "all" ? "همه سال‌ها" : 
+                yearRange === "2024" ? "۱۴۰۳" : 
+                yearRange === "2023" ? "۱۴۰۲" : 
+                yearRange === "2022-2023" ? "۱۴۰۱-۱۴۰۲" : 
+                "۱۴۰۰-۱۴۰۱"}
             </span>
             <ChevronDown size={13} className="text-white/30 dark:text-white/30 light:text-black/30" />
           </button>
           {showYearDropdown && (
-            <div className="absolute top-full mt-2 bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-xl p-2 z-50 min-w-[160px] shadow-2xl">
-              {["all", "2024", "2023", "2022-2023", "2020-2021"].map(yr => (
+            <div className="absolute top-full mt-2 bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-xl p-2 z-50 min-w-[140px] shadow-2xl">
+              {[
+                { value: "all", label: "همه سال‌ها" },
+                { value: "2024", label: "۱۴۰۳" },
+                { value: "2023", label: "۱۴۰۲" },
+                { value: "2022-2023", label: "۱۴۰۱-۱۴۰۲" },
+                { value: "2020-2021", label: "۱۴۰۰-۱۴۰۱" }
+              ].map(yr => (
                 <button
-                  key={yr}
-                  onClick={() => { setYearRange(yr); setShowYearDropdown(false); setCurrentPage(1); }}
+                  key={yr.value}
+                  onClick={() => { setYearRange(yr.value); setShowYearDropdown(false); setCurrentPage(1); }}
                   className="w-full text-right px-3 py-2 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black hover:bg-white/8 dark:hover:bg-white/8 light:hover:bg-black/8 rounded-lg text-sm transition-colors"
                 >
-                  {yr === "all" ? t.browse.allYears : yr === "2024" ? toPersianDigits("2024") : yr === "2023" ? toPersianDigits("2023") : yr === "2022-2023" ? `${toPersianDigits("2022")}-${toPersianDigits("2023")}` : `${toPersianDigits("2020")}-${toPersianDigits("2021")}`}
+                  {yr.label}
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Rating Filter */}
+        {/* دکمه امتیاز */}
         <div className="relative">
           <button
             onClick={() => setShowRatingDropdown(!showRatingDropdown)}
@@ -1572,45 +1987,60 @@ function BrowsePage({
           >
             <Star size={11} className="text-amber-400" />
             <span className="text-white/60 dark:text-white/60 light:text-black/60 text-sm">
-              {minRating === 0 ? t.browse.rating : `${toPersianDigits(minRating)}+`}
+              {minRating === 0 ? "همه امتیازها" : `${toPersianDigits(minRating)}+ ستاره`}
             </span>
             <ChevronDown size={13} className="text-white/30 dark:text-white/30 light:text-black/30" />
           </button>
           {showRatingDropdown && (
             <div className="absolute top-full mt-2 bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-xl p-2 z-50 min-w-[140px] shadow-2xl">
-              {[0, 7, 8, 9].map(rating => (
+              {[
+                { value: 0, label: "همه امتیازها" },
+                { value: 7, label: "۷+ ستاره" },
+                { value: 8, label: "۸+ ستاره" },
+                { value: 9, label: "۹+ ستاره" }
+              ].map(rating => (
                 <button
-                  key={rating}
-                  onClick={() => { setMinRating(rating); setShowRatingDropdown(false); setCurrentPage(1); }}
+                  key={rating.value}
+                  onClick={() => { setMinRating(rating.value); setShowRatingDropdown(false); setCurrentPage(1); }}
                   className="w-full text-right px-3 py-2 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black hover:bg-white/8 dark:hover:bg-white/8 light:hover:bg-black/8 rounded-lg text-sm transition-colors"
                 >
-                  {rating === 0 ? t.browse.allRatings : `${toPersianDigits(rating)}+ ستاره`}
+                  {rating.label}
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Sort Filter */}
+        {/* دکمه مرتب‌سازی */}
         <div className="relative">
           <button
             onClick={() => setShowSortDropdown(!showSortDropdown)}
             className="flex items-center gap-2 bg-card border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-2.5 hover:border-white/20 dark:hover:border-white/20 light:hover:border-black/20 transition-colors"
           >
             <span className="text-white/60 dark:text-white/60 light:text-black/60 text-sm">
-              {t.browse.sortBy}: {sortBy === "popularity" ? t.browse.popularity : sortBy === "rating" ? t.browse.rating : sortBy === "year" ? t.browse.releaseDate : t.browse.title}
+              مرتب‌سازی: {
+                sortBy === "score_desc" ? "بیشترین امتیاز" :
+                sortBy === "year_desc" ? "جدیدترین" :
+                sortBy === "year_asc" ? "قدیمی‌ترین" :
+                "الفبایی"
+              }
             </span>
             <ChevronDown size={13} className="text-white/30 dark:text-white/30 light:text-black/30" />
           </button>
           {showSortDropdown && (
             <div className="absolute top-full mt-2 bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-xl p-2 z-50 min-w-[160px] shadow-2xl">
-              {["popularity", "rating", "year", "title"].map(sort => (
+              {[
+                { value: "score_desc", label: "بیشترین امتیاز" },
+                { value: "year_desc", label: "جدیدترین" },
+                { value: "year_asc", label: "قدیمی‌ترین" },
+                { value: "title_asc", label: "الفبایی" }
+              ].map(sort => (
                 <button
-                  key={sort}
-                  onClick={() => { setSortBy(sort); setShowSortDropdown(false); }}
+                  key={sort.value}
+                  onClick={() => { setSortBy(sort.value); setShowSortDropdown(false); }}
                   className="w-full text-right px-3 py-2 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black hover:bg-white/8 dark:hover:bg-white/8 light:hover:bg-black/8 rounded-lg text-sm transition-colors"
                 >
-                  {sort === "popularity" ? t.browse.popularity : sort === "rating" ? t.browse.rating : sort === "year" ? t.browse.releaseDate : t.browse.title}
+                  {sort.label}
                 </button>
               ))}
             </div>
@@ -1620,66 +2050,74 @@ function BrowsePage({
         {activeFilterCount > 0 && (
           <button
             onClick={clearAllFilters}
-            className="flex items-center gap-2 text-white/40 dark:text-white/40 light:text-black/40 hover:text-white/60 dark:hover:text-white/60 light:hover:text-black/60 text-sm transition-colors mr-2"
+            className="flex items-center gap-2 text-white/40 dark:text-white/40 light:text-black/40 hover:text-white/60 dark:hover:text-white/60 light:hover:text-black/60 text-sm transition-colors"
           >
-            <X size={13} /> {t.browse.clearAll}
+            <X size={13} /> پاک کردن همه فیلترها
           </button>
         )}
       </div>
 
-      {/* Active Filters Pills */}
+      {/* نمایش فیلترهای فعال */}
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2 mb-7 flex-wrap">
-          <span className="text-white/30 dark:text-white/30 light:text-black/30 text-xs font-mono uppercase tracking-wider">{t.browse.active}:</span>
+          <span className="text-white/30 dark:text-white/30 light:text-black/30 text-xs font-mono uppercase tracking-wider">فیلترهای فعال:</span>
           {selectedGenres.map((g) => (
             <FilterChip key={g} label={g} onRemove={() => toggleGenre(g)} />
           ))}
           {minRating > 0 && (
-            <FilterChip label={`${t.browse.rating}: ${toPersianDigits(minRating)}+`} onRemove={() => { setMinRating(0); setCurrentPage(1); }} />
+            <FilterChip label={`${toPersianDigits(minRating)}+ ستاره`} onRemove={() => { setMinRating(0); setCurrentPage(1); }} />
           )}
           {yearRange !== "all" && (
-            <FilterChip label={`${t.browse.year}: ${yearRange}`} onRemove={() => { setYearRange("all"); setCurrentPage(1); }} />
+            <FilterChip label={`سال: ${yearRange}`} onRemove={() => { setYearRange("all"); setCurrentPage(1); }} />
           )}
         </div>
       )}
 
-      {/* Results Count */}
       <div className="flex items-center justify-between mb-6">
         <p className="text-white/40 dark:text-white/40 light:text-black/40 text-sm">
-          {t.browse.showing} <span className="text-white/70 dark:text-white/70 light:text-black/70">{toPersianDigits(Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredResults.length))}–{toPersianDigits(Math.min(currentPage * ITEMS_PER_PAGE, filteredResults.length))}</span> {t.browse.of}{" "}
-          <span className="text-white/70 dark:text-white/70 light:text-black/70">{toPersianDigits(filteredResults.length)}</span> {t.browse.results}
+          {hasSearched ? (
+            `${toPersianDigits(totalResults)} نتیجه پیدا شد`
+          ) : (
+            "برای شروع جستجو کنید"
+          )}
         </p>
       </div>
 
-      {/* Results Grid */}
-      {paginatedResults.length > 0 ? (
-        <div className="grid grid-cols-4 gap-5 mb-12">
-          {paginatedResults.map((m) => (
-            <MovieCard key={m.id} movie={m} onClick={() => setPage(m.type === "TV" ? "tv" : "movie", m)} showTypeBadge />
-          ))}
+      {isSearching ? (
+        <div className="text-center py-32">
+          <div className="inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+          <p className="text-white/40 mt-4">در حال جستجو...</p>
         </div>
-      ) : (
+      ) : paginatedResults.length > 0 ? (
+        <div className="grid grid-cols-4 gap-5 mb-12">
+          {paginatedResults.map((item) => {
+            const movieData = convertSearchResultToMovieData(item);
+            return (
+              <MovieCard key={item.title_id} movie={movieData} onClick={() => setPage(movieData.type === "TV" ? "tv" : "movie", movieData)} showTypeBadge />
+            );
+          })}
+        </div>
+      ) : hasSearched ? (
         <div className="text-center py-20">
-          <p className="text-white/40 dark:text-white/40 light:text-black/50 text-lg mb-2">{t.home.noTitlesFound}</p>
-          <p className="text-white/25 dark:text-white/25 light:text-black/35 text-sm mb-6">{t.home.tryDifferentSearch}</p>
+          <p className="text-white/40 dark:text-white/40 light:text-black/50 text-lg mb-2">نتیجه‌ای یافت نشد</p>
+          <p className="text-white/25 dark:text-white/25 light:text-black/35 text-sm mb-6">لطفاً فیلترهای دیگری را امتحان کنید</p>
           <button
             onClick={clearAllFilters}
-            className="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent active:bg-primary/90 transition-all shadow-lg shadow-primary/20 hover:shadow-primary/40"
+            className="px-6 py-2.5 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent transition-colors"
           >
-            {t.home.clearFilters}
+            پاک کردن همه فیلترها
           </button>
         </div>
-      )}
+      ) : null}
 
-      {/* Pagination */}
       {paginatedResults.length > 0 && totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black hover:border-white/20 dark:hover:border-white/20 light:hover:border-black/20 disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
           >
-            <ChevronRight size={14} /> {t.browse.previous}
+            <ChevronRight size={14} /> قبلی
           </button>
           <div className="flex gap-1.5">
             {pageNums.map((p, i) => (
@@ -1691,7 +2129,7 @@ function BrowsePage({
                     ? "bg-primary text-white shadow-lg shadow-[#E50914]/20"
                     : p === "..."
                     ? "text-white/25 dark:text-white/25 light:text-black/25 cursor-default"
-                    : "bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black hover:border-white/20 dark:hover:border-white/20 light:hover:border-black/20"
+                    : "bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black"
                 }`}
               >
                 {typeof p === "number" ? toPersianDigits(p) : p}
@@ -1701,9 +2139,9 @@ function BrowsePage({
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black hover:border-white/20 dark:hover:border-white/20 light:hover:border-black/20 disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
           >
-            {t.browse.next} <ChevronLeft size={14} />
+            بعدی <ChevronLeft size={14} />
           </button>
         </div>
       )}
@@ -1711,7 +2149,7 @@ function BrowsePage({
   );
 }
 
-// ── Page 6: Profile ────────────────────────────────────────────────────────────
+// ── Page 6: Profile (بدون تغییر) ──────────────────────────────────────────────
 
 function ProfilePage({
   setPage,
@@ -1724,6 +2162,7 @@ function ProfilePage({
   onEditRating: (id: number, score: number, review: string) => void;
   onDeleteRating: (id: number) => void;
 }) {
+  // ... (همان کد قبلی ProfilePage)
   const [watchlistPage, setWatchlistPage] = useState(1);
   const [watchlistFilter, setWatchlistFilter] = useState<"all" | "movies" | "tv">("all");
   const [reviewsPage, setReviewsPage] = useState(1);
@@ -1800,7 +2239,6 @@ function ProfilePage({
     if (confirmDeleteId !== null) {
       onDeleteRating(confirmDeleteId);
       setConfirmDeleteId(null);
-      // clamp page if needed
       const newTotal = ratedTitles.length - 1;
       const maxPage = Math.ceil(newTotal / REVIEWS_PER_PAGE) || 1;
       if (reviewsPage > maxPage) setReviewsPage(maxPage);
@@ -1809,7 +2247,6 @@ function ProfilePage({
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-12">
-      {/* Profile Header */}
       <div className="flex items-start gap-6 mb-12 pb-12 border-b border-white/8 dark:border-white/8 light:border-black/8">
         <div className={`w-24 h-24 rounded-full bg-gradient-to-br ${getAvatarGradient(profileAvatar)} flex items-center justify-center text-white text-3xl font-bold flex-shrink-0 shadow-2xl`}
           style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
@@ -1833,7 +2270,6 @@ function ProfilePage({
         </button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-5 gap-4 mb-14">
         {stats.map((s) => (
           <div key={s.label} className="bg-card rounded-2xl p-6 border border-white/8 dark:border-white/8 light:border-black/8 text-center hover:border-white/15 dark:hover:border-white/15 light:hover:border-black/15 transition-colors">
@@ -1845,7 +2281,6 @@ function ProfilePage({
         ))}
       </div>
 
-      {/* Watchlist */}
       <section className="mb-14">
         <SectionHeader title={t.profile.watchlist} />
         <div className="flex gap-1 mb-6 bg-card border border-white/8 dark:border-white/8 light:border-black/8 rounded-xl p-1 w-fit">
@@ -1881,7 +2316,6 @@ function ProfilePage({
         )}
       </section>
 
-      {/* Ratings & Reviews */}
       <section>
         <SectionHeader title={t.profile.ratingsAndReviews} />
         {ratedTitles.length === 0 ? (
@@ -1962,7 +2396,6 @@ function ProfilePage({
         )}
       </section>
 
-      {/* Edit Profile Modal */}
       {showEditProfile && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setShowEditProfile(false)}>
           <div className="bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -1971,7 +2404,6 @@ function ProfilePage({
               <button onClick={() => setShowEditProfile(false)} className="text-white/40 dark:text-white/40 light:text-black/40 hover:text-white dark:hover:text-white light:hover:text-black transition-colors"><X size={20} /></button>
             </div>
             <div className="space-y-5">
-              {/* Avatar Picker */}
               <div>
                 <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-3">{t.editProfile.avatarColor}</label>
                 <div className="flex items-center gap-4">
@@ -2041,7 +2473,6 @@ function ProfilePage({
         </div>
       )}
 
-      {/* Edit Rating Modal */}
       {editingId !== null && (() => {
         const entry = ratedTitles.find(r => r.id === editingId);
         if (!entry) return null;
@@ -2054,7 +2485,6 @@ function ProfilePage({
               </div>
               <p className="text-white/40 dark:text-white/40 light:text-black/50 text-sm mb-6">{entry.title}</p>
               <div className="space-y-6">
-                {/* Half-star rating */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-white/60 dark:text-white/60 light:text-black/60 text-sm">{t.editRating.yourRating} <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">({t.editRating.required})</span></label>
@@ -2067,7 +2497,6 @@ function ProfilePage({
                     <p className="text-primary text-xs mt-2">{t.editRating.scoreRequired}</p>
                   )}
                 </div>
-                {/* Review text (optional) */}
                 <div>
                   <label className="block text-white/60 text-sm mb-2">
                     {t.editRating.review} <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">({t.editRating.optional})</span>
@@ -2096,7 +2525,6 @@ function ProfilePage({
         );
       })()}
 
-      {/* Delete Confirmation Modal */}
       {confirmDeleteId !== null && (() => {
         const entry = ratedTitles.find(r => r.id === confirmDeleteId);
         if (!entry) return null;
