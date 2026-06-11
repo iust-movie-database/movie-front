@@ -28,13 +28,4 @@ export default defineConfig({
     },
   },
   assetsInclude: ['**/*.svg', '**/*.csv'],
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (pathStr: string) => pathStr.replace(/^\/api/, '')
-      }
-    }
-  }
 })

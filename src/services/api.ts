@@ -1,7 +1,6 @@
 // src/services/api.ts
-
-// از آدرس نسبی استفاده کنید (با /api شروع می‌شود)
-const API_BASE_URL = '/api';
+import { getToken, setToken, removeToken } from '../utils/jwt.utils';
+const API_BASE_URL = 'http://localhost:8000';
 
 // تابع کمکی برای مدیریت پاسخ‌ها
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -10,6 +9,133 @@ async function handleResponse<T>(response: Response): Promise<T> {
     throw new Error(error.detail || `HTTP error! status: ${response.status}`);
   }
   return response.json();
+}
+
+// ============ JWT Auth Types & Functions (Matching your backend) ============
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface SignupCredentials {
+  username: string;
+  email: string;
+  password: string;
+}
+
+// Login/Register response structure (matches your backend)
+export interface AuthResponse {
+  access_token: string;   // Changed from 'token' to 'access_token'
+  token_type: string;      // New field
+  user_id: number;         // Changed from object to direct fields
+  username: string;        // New field
+  email: string;           // New field
+}
+
+// Login function - UPDATED for your backend
+export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(credentials),
+  });
+  
+  const data = await handleResponse<AuthResponse>(response);
+  
+  // Changed: data.access_token instead of data.token
+  if (data.access_token) {
+    setToken(data.access_token);
+  }
+  
+  return data;
+}
+
+// NEW: Signup function for your backend
+export async function signup(credentials: SignupCredentials): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(credentials),
+  });
+  
+  const data = await handleResponse<AuthResponse>(response);
+  
+  if (data.access_token) {
+    setToken(data.access_token);
+  }
+  
+  return data;
+}
+
+// Logout function - REMOVED backend call (since you have no logout endpoint)
+export async function logout(): Promise<void> {
+  // Just remove token locally
+  removeToken();
+  // Remove user data if you stored it
+  localStorage.removeItem('user_data');
+  // Optional: redirect to login
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login';
+  }
+}
+
+// Get current user - TEMPORARILY DISABLED (since no /auth/me endpoint yet)
+// You'll need to save user data from login/signup response instead
+export async function getCurrentUser(): Promise<Omit<AuthResponse, 'access_token'>> {
+  // Since your backend doesn't have /auth/me endpoint yet,
+  // we'll get user data from localStorage instead
+  const userDataStr = localStorage.getItem('user_data');
+  if (!userDataStr) {
+    throw new Error('No user data found');
+  }
+  return JSON.parse(userDataStr);
+}
+
+// Helper function to save user data after login/signup
+export const saveUserData = (response: AuthResponse): void => {
+  const userData = {
+    user_id: response.user_id,
+    username: response.username,
+    email: response.email,
+  };
+  localStorage.setItem('user_data', JSON.stringify(userData));
+};
+
+// Helper: Get authentication headers
+function getAuthHeaders(): HeadersInit {
+  const token = getToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+// Generic authenticated fetch function (unchanged)
+export async function authenticatedFetch<T>(
+  url: string, 
+  options: RequestInit = {}
+): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+      ...getAuthHeaders(),
+    },
+  });
+  
+  if (response.status === 401) {
+    removeToken();
+    localStorage.removeItem('user_data');
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please login again.');
+  }
+  
+  return handleResponse<T>(response);
 }
 
 // ============ Types ============
@@ -224,6 +350,12 @@ export async function getRecommendations(limit: number = 5, token?: string): Pro
   const headers: HeadersInit = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    // Auto-add token if available
+    const autoToken = getToken();
+    if (autoToken) {
+      headers['Authorization'] = `Bearer ${autoToken}`;
+    }
   }
   const response = await fetch(`${API_BASE_URL}/homepage/recommendations?limit=${limit}`, { headers });
   return handleResponse<Recommendation[]>(response);

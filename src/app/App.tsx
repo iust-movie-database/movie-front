@@ -174,7 +174,7 @@ function convertSearchResultToMovieData(item: SearchResult): MovieData {
 // ── Navigation ─────────────────────────────────────────────────────────────────
 
 function Nav({
-  page, setPage, globalSearch, setGlobalSearch, isLoggedIn, onLogin, onLogout, theme, onThemeToggle,
+  page, setPage, globalSearch, setGlobalSearch, isLoggedIn, onLogin, onLogout, theme, onThemeToggle, currentUser,
 }: {
   page: Page;
   setPage: (p: Page, movieData?: MovieData) => void;
@@ -185,6 +185,7 @@ function Nav({
   onLogout: () => void;
   theme: "dark" | "light";
   onThemeToggle: () => void;
+  currentUser: { user_id: number; username: string; email: string } | null;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [authModal, setAuthModal] = useState<"login" | "signup" | null>(null);
@@ -303,13 +304,12 @@ function Nav({
                 <div className="w-px h-5 bg-white/10 dark:bg-white/10 light:bg-black/10" />
                 <button
                   onClick={() => setPage("profile")}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/6 dark:bg-white/6 light:bg-black/6 border border-white/12 dark:border-white/12 light:border-black/12 hover:bg-white/10 dark:hover:bg-white/10 light:hover:bg-black/10 transition-all"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/6 border border-white/12 hover:bg-white/10 transition-all"
                 >
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#E50914] to-[#5A0009] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                    style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
-                    JD
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#E50914] to-[#5A0009] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                    {currentUser?.username?.slice(0, 2).toUpperCase() || 'U'}
                   </div>
-                  <span className="text-white/80 dark:text-white/80 light:text-black/80 text-sm font-medium">john_doe</span>
+                  <span className="text-white/80 text-sm font-medium">{currentUser?.username || 'user'}</span>
                 </button>
                 <button
                   onClick={onLogout}
@@ -1721,8 +1721,6 @@ function TVDetailPage({
 
 // ── Page 5: Browse (با اتصال به API جستجو) ─────────────────────────────────────
 
-// ── Page 5: Browse (با اتصال به API جستجو) ─────────────────────────────────────
-
 function BrowsePage({
   setPage,
   globalSearch,
@@ -2156,13 +2154,14 @@ function ProfilePage({
   ratedTitles,
   onEditRating,
   onDeleteRating,
+  user,
 }: {
   setPage: (p: Page, movieData?: MovieData) => void;
   ratedTitles: RatedEntry[];
   onEditRating: (id: number, score: number, review: string) => void;
   onDeleteRating: (id: number) => void;
+  user: { user_id: number; username: string; email: string } | null;
 }) {
-  // ... (همان کد قبلی ProfilePage)
   const [watchlistPage, setWatchlistPage] = useState(1);
   const [watchlistFilter, setWatchlistFilter] = useState<"all" | "movies" | "tv">("all");
   const [reviewsPage, setReviewsPage] = useState(1);
@@ -2171,10 +2170,17 @@ function ProfilePage({
   const [editScore, setEditScore] = useState(0);
   const [editComment, setEditComment] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [profileUsername, setProfileUsername] = useState("john_doe");
-  const [profileEmail, setProfileEmail] = useState("john@example.com");
+  const [profileUsername, setProfileUsername] = useState(user?.username || "کاربر");
+  const [profileEmail, setProfileEmail] = useState(user?.email || "");
   const [profileBio, setProfileBio] = useState("Film enthusiast and critic. Love indie films and classic cinema.");
   const [profileAvatar, setProfileAvatar] = useState("red");
+
+  useEffect(() => {
+    if (user) {
+      setProfileUsername(user.username);
+      setProfileEmail(user.email);
+    }
+  }, [user]);
   const [editUsername, setEditUsername] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editBio, setEditBio] = useState("");
@@ -2559,6 +2565,7 @@ export default function App() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authGateModal, setAuthGateModal] = useState<"login" | "signup" | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; email: string } | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window !== "undefined") {
@@ -2567,6 +2574,22 @@ export default function App() {
     }
     return "dark";
   });
+
+// Load user from localStorage on app start
+  useEffect(() => {
+    const userData = localStorage.getItem('user_data');
+    const token = localStorage.getItem('access_token');
+    
+    if (userData && token) {
+      try {
+        const user = JSON.parse(userData);
+        setCurrentUser(user);
+        setIsLoggedIn(true);
+      } catch (e) {
+        console.error('Failed to parse user data');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.remove("dark", "light");
@@ -2600,12 +2623,28 @@ export default function App() {
   }
 
   function handleLogin() {
+    // Load user data from localStorage after login
+    const userData = localStorage.getItem('user_data');
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        setCurrentUser(user);
+      } catch (e) {
+        console.error('Failed to parse user data');
+      }
+    }
     setIsLoggedIn(true);
     setAuthGateModal(null);
   }
 
   function handleLogout() {
+    // Clear all stored data
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_data');
+    
+    setCurrentUser(null);
     setIsLoggedIn(false);
+    
     if (page === "profile") {
       setPage("home");
       setPageHistory([]);
@@ -2642,6 +2681,7 @@ export default function App() {
         onLogout={handleLogout}
         theme={theme}
         onThemeToggle={toggleTheme}
+        currentUser={currentUser}
       />
       {authGateModal && (
         <AuthFlow
@@ -2682,6 +2722,7 @@ export default function App() {
           ratedTitles={ratedTitles}
           onEditRating={handleEditRating}
           onDeleteRating={handleDeleteRating}
+          user={currentUser}
         />
       )}
     </div>
