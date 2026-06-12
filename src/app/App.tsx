@@ -3408,31 +3408,38 @@ function ProfilePage({
                         new_password: editPassword.trim() || null
                       };
                       
-                      // Only proceed if there's at least one field to update (not all null)
+                      // Only proceed if there's at least one field to update
                       const hasChanges = Object.values(updateData).some(value => value !== null);
                       if (!hasChanges) {
                         setGeneralError("هیچ تغییری اعمال نشده است");
                         return;
                       }
                       
-                      await updateProfile(updateData); 
+                      // Send to backend and get response with new token and user data
+                      const response = await updateProfile(updateData);
                       
-                      // Update local states if changed
-                      if (updateData.username) setProfileUsername(updateData.username);
-                      if (updateData.email) setProfileEmail(updateData.email);
-                      if (updateData.photo_url) setProfilePhotoUrl(updateData.photo_url);
+                      // Update token in localStorage
+                      if (response.access_token) {
+                        localStorage.setItem('access_token', response.access_token);
+                      }
                       
-                      // Update localStorage
-                      const currentUser = JSON.parse(localStorage.getItem('user_data') || '{}'); 
-                      const updatedUser = { 
-                        ...currentUser, 
-                        ...(updateData.username && { username: updateData.username }),
-                        ...(updateData.email && { email: updateData.email }),
-                        ...(updateData.photo_url && { photo_url: updateData.photo_url })
-                      }; 
-                      localStorage.setItem('user_data', JSON.stringify(updatedUser)); 
+                      // Update user data from backend response
+                      setProfileUsername(response.username);
+                      setProfileEmail(response.email);
+                      // Use default photo_url if backend doesn't return one
+                      const defaultPhotoUrl = 'https://ui-avatars.com/api/?background=E50914&color=fff&size=96&name=' + encodeURIComponent(response.username);
+                      setProfilePhotoUrl(defaultPhotoUrl);
                       
-                      // Success - close modal and reset
+                      // Update localStorage user_data
+                      const updatedUserData = {
+                        user_id: response.user_id,
+                        username: response.username,
+                        email: response.email,
+                        photo_url: defaultPhotoUrl
+                      };
+                      localStorage.setItem('user_data', JSON.stringify(updatedUserData));
+                      
+                      // Close modal and reset form
                       setShowEditProfile(false); 
                       setEditPassword(""); 
                       setEditPhotoUrl("");
@@ -3441,11 +3448,10 @@ function ProfilePage({
                       setGeneralError("");
                       setEditEmail("");
                       setEditUsername("");
-                      
+                                            
                     } catch (error: any) { 
                       console.error('Update error:', error);
                       
-                      // Try to get the actual error message
                       let errorMessage = "خطا در به روزرسانی پروفایل";
                       
                       if (error?.message && typeof error.message === 'string') {
@@ -3454,7 +3460,6 @@ function ProfilePage({
                         errorMessage = error.toString();
                       }
                       
-                      // Check if it's a password error
                       if (errorMessage.includes("422") || 
                           errorMessage.includes("password") || 
                           errorMessage.includes("رمز") ||
@@ -3474,7 +3479,7 @@ function ProfilePage({
           </div>
         </div>
       )}
-      
+
       {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-8" onClick={() => {

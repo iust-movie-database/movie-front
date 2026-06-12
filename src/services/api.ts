@@ -591,14 +591,14 @@ export async function getUserProfile(): Promise<UserProfile> {
   return handleResponse<UserProfile>(response);
 }
 
-export async function updateProfile(data: { 
-  current_password?: string | null;
-  username?: string | null;
-  email?: string | null;
-  photo_url?: string | null;
-  new_password?: string | null;
-}): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/profile/profile`, {
+export async function updateProfile(data: any): Promise<{
+  access_token: string;
+  token_type: string;
+  user_id: number;
+  username: string;
+  email: string;
+}> {
+  const response = await fetch(`${API_BASE_URL}/profile`, {
     method: 'PUT',
     headers: {
       ...getAuthHeaders(),
@@ -606,13 +606,7 @@ export async function updateProfile(data: {
     },
     body: JSON.stringify(data),
   });
-  
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || errorData.detail || 'Update failed');
-  }
-  
-  return handleResponse<{ success: boolean; message: string }>(response);
+  return handleResponse(response);
 }
 
 export async function deleteProfile(password: string): Promise<{ success: boolean; message: string }> {
