@@ -299,6 +299,23 @@ export interface Episode {
   episode_summary: string;
 }
 
+// ============ Watchlist Types ============
+
+export interface WatchlistItem {
+  title_id: number;
+  t_type: string;        // "M" = Movie, "S" = Series
+  age_rating: string;
+  name_fa: string;
+  name_en: string;
+  poster_url: string | null;
+  genres: string;
+  release_year: number;
+  duration_mins: number | null;
+  total_seasons: number | null;
+  total_episodes: number | null;
+  status: string;        // "want_to_watch", "watching", "watched"
+}
+
 // ============ Search Types ============
 
 // در src/services/api.ts
@@ -334,7 +351,153 @@ export interface SearchParams {
   offset?: number;
 }
 
+export interface UserRating {
+  title_id: number;
+  title_name_fa: string;
+  title_name_en: string;
+  poster_url: string;
+  rating_score: number;
+  rating_date: string;
+  review_text: string;
+  is_spoiler: boolean;
+  t_type: string;
+}
+
+// ============ Profile Types ============
+
+export interface UserProfile {
+  username: string;
+  join_date: string;  // format: "2026-06-11"
+  photo_url: string | null;
+  email: string;
+  total_rated: number;
+  total_written: number;
+  total_want_to_watch: number;
+  total_watching: number;
+  total_watched: number;
+}
+
+// Update user profile
+export async function updateProfile(data: { 
+  username?: string; 
+  password?: string;
+  photo_url?: string;
+}) {
+  const token = localStorage.getItem('access_token');
+  const response = await fetch('/api/profile', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json(); // Try to get error details
+    console.error('Server response:', errorData);
+    throw new Error(errorData.message || errorData.error || 'Update failed');
+  }
+  
+  return response.json();
+}
+
+// Delete user account
+export async function deleteProfile(): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE_URL}/profile/`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<{ status: string }>(response);
+}
+
 // ============ توابع API ============
+
+// Get user's ratings and reviews from backend
+export async function getUserRatings(): Promise<UserRating[]> {
+  const response = await fetch(`${API_BASE_URL}/user/rating`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<UserRating[]>(response);
+}
+
+// Add or update a rating/review
+export async function addOrUpdateRating(titleId: number, data: {
+  score: number;
+  comment: string;
+  is_spoiler: boolean;
+}): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<{ status: string }>(response);
+}
+
+// Delete a rating/review
+export async function deleteRating(titleId: number): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<{ status: string }>(response);
+}
+
+// Add to watchlist
+export async function addToWatchlist(titleId: number): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE_URL}/saved/${titleId}`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ status: "Want to Watch" }),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
+// Remove from watchlist
+export async function removeFromWatchlist(titleId: number): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE_URL}/saved/${titleId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ status: "removed" }), // ← sending status
+  });
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
+// Get user watchlist
+export async function getUserWatchlist(): Promise<WatchlistItem[]> {
+  const response = await fetch(`${API_BASE_URL}/user/watchlist`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<WatchlistItem[]>(response);
+}
+
+// Get user profile
+export async function getUserProfile(): Promise<UserProfile> {
+  const response = await fetch(`${API_BASE_URL}/user/profile`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<UserProfile>(response);
+}
 
 export async function getHero(limit: number = 5): Promise<HeroTitle[]> {
   const response = await fetch(`${API_BASE_URL}/homepage/hero?limit=${limit}`);

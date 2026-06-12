@@ -19,7 +19,20 @@ import {
 } from "./components/shared";
 import { MOVIES, TV_SERIES, COMING_SOON, SEED_RATINGS } from "./data/mockData";
 import type { Page, MovieData, RatedEntry } from "./types";
-
+import { 
+  getUserProfile, 
+  getUserWatchlist,
+  type UserProfile,
+  type WatchlistItem,
+  type UserRating,
+  addToWatchlist,
+  removeFromWatchlist,
+  getUserRatings,
+  addOrUpdateRating,
+  deleteRating,
+  updateProfile,
+  deleteProfile,
+} from '../services/api';
 // Import all API functions
 import { 
   getHero, 
@@ -1035,6 +1048,8 @@ function MovieDetailPage({
   ratedTitles,
   onRate,
   setGlobalSearch,
+  isLoggedIn,
+  onAuthRequest,
 }: {
   movie: MovieData;
   setPage: (p: Page, movieData?: MovieData) => void;
@@ -1042,6 +1057,8 @@ function MovieDetailPage({
   ratedTitles: RatedEntry[];
   onRate: (entry: RatedEntry) => void;
   setGlobalSearch: (q: string) => void;
+  isLoggedIn: boolean;
+  onAuthRequest: () => void;
 }) {
   const [saved, setSaved] = useState(false);
   const [pendingScore, setPendingScore] = useState(0);
@@ -1086,6 +1103,26 @@ function MovieDetailPage({
     }
     fetchDetails();
   }, [movie.id]);
+
+    // Handle save/unsave button click
+  const handleToggleSave = async () => {
+    if (!isLoggedIn) {
+      onAuthRequest();
+      return;
+    }
+    
+    try {
+      if (saved) {
+        await removeFromWatchlist(movie.id);
+        setSaved(false);
+      } else {
+        await addToWatchlist(movie.id);
+        setSaved(true);
+      }
+    } catch (error) {
+      alert('خطا در انجام عملیات. لطفاً دوباره تلاش کنید.');
+    }
+  };
 
   function goToBrowseWithQuery(q: string) {
     setGlobalSearch(q);
@@ -1158,7 +1195,7 @@ function MovieDetailPage({
           </div>
           <p className="text-white/60 text-sm leading-relaxed mb-8 max-w-2xl">{details?.summary || movie.summary}</p>
           <div className="flex gap-3 flex-wrap items-center">
-            <SaveButton saved={saved} onToggle={() => setSaved(!saved)} />
+            <SaveButton saved={saved} onToggle={handleToggleSave} />
             {existingRating ? (
               <div className="flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5">
                 <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
@@ -1332,6 +1369,8 @@ function TVDetailPage({
   ratedTitles,
   onRate,
   setGlobalSearch,
+  isLoggedIn,
+  onAuthRequest,
 }: {
   movie: MovieData;
   setPage: (p: Page, movieData?: MovieData) => void;
@@ -1339,6 +1378,8 @@ function TVDetailPage({
   ratedTitles: RatedEntry[];
   onRate: (entry: RatedEntry) => void;
   setGlobalSearch: (q: string) => void;
+  isLoggedIn: boolean;
+  onAuthRequest: () => void;
 }) {
   const [saved, setSaved] = useState(false);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
@@ -1396,6 +1437,25 @@ function TVDetailPage({
     fetchDetails();
   }, [tvShow.id]);
 
+  const handleToggleSave = async () => {
+    if (!isLoggedIn) {
+      onAuthRequest();
+      return;
+    }
+    
+    try {
+      if (saved) {
+        await removeFromWatchlist(movie.id);
+        setSaved(false);
+      } else {
+        await addToWatchlist(movie.id);
+        setSaved(true);
+      }
+    } catch (error) {
+      alert('خطا در انجام عملیات. لطفاً دوباره تلاش کنید.');
+    }
+  };
+  
   function goToBrowseWithQuery(q: string) {
     setGlobalSearch(q);
     setPage("browse");
@@ -1488,7 +1548,7 @@ function TVDetailPage({
             {details?.summary || tvShow.summary}
           </p>
           <div className="flex gap-3 flex-wrap items-center">
-            <SaveButton saved={saved} onToggle={() => setSaved(!saved)} />
+            <SaveButton saved={saved} onToggle={handleToggleSave} />
             {existingRating ? (
               <div className="flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5">
                 <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
@@ -2163,119 +2223,247 @@ function ProfilePage({
   user: { user_id: number; username: string; email: string } | null;
 }) {
   const [watchlistPage, setWatchlistPage] = useState(1);
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
+  const [isLoadingWatchlist, setIsLoadingWatchlist] = useState(true);
   const [watchlistFilter, setWatchlistFilter] = useState<"all" | "movies" | "tv">("all");
+  const [userRatings, setUserRatings] = useState<UserRating[]>([]);
+  const [isLoadingRatings, setIsLoadingRatings] = useState(true);
   const [reviewsPage, setReviewsPage] = useState(1);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editPhotoUrl, setEditPhotoUrl] = useState("");
+  const [editPassword, setEditPassword] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editScore, setEditScore] = useState(0);
   const [editComment, setEditComment] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [profileUsername, setProfileUsername] = useState(user?.username || "کاربر");
   const [profileEmail, setProfileEmail] = useState(user?.email || "");
-  const [profileBio, setProfileBio] = useState("Film enthusiast and critic. Love indie films and classic cinema.");
-  const [profileAvatar, setProfileAvatar] = useState("red");
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [profileJoinDate, setProfileJoinDate] = useState("");
+  const [profileStats, setProfileStats] = useState({
+    total_rated: 0,
+    total_written: 0,
+    total_want_to_watch: 0,
+    total_watching: 0,
+    total_watched: 0
+  });
 
+  // Fetch profile from API
   useEffect(() => {
-    if (user) {
-      setProfileUsername(user.username);
-      setProfileEmail(user.email);
+    async function fetchProfile() {
+      setIsLoadingProfile(true);
+      setIsLoadingWatchlist(true);
+      try {
+        // Fetch user profile data
+        const data = await getUserProfile();
+        console.log('Profile data received:', data);
+        
+        setProfileData(data);
+        setProfileUsername(data.username);
+        setProfileEmail(data.email);
+        setProfileJoinDate(data.join_date);
+        setProfilePhotoUrl(data.photo_url || null);
+        setProfileStats({
+          total_rated: data.total_rated || 0,
+          total_written: data.total_written || 0,
+          total_want_to_watch: data.total_want_to_watch || 0,
+          total_watching: data.total_watching || 0,
+          total_watched: data.total_watched || 0
+        });
+
+        // Fetch user watchlist
+        try {
+          const watchlistData = await getUserWatchlist();
+          console.log('Watchlist data received:', watchlistData);
+          setWatchlistItems(watchlistData);
+        } catch (watchlistErr) {
+          console.error('Failed to fetch watchlist:', watchlistErr);
+          setWatchlistItems([]);
+        }
+        // Fetch user ratings
+        try {
+          const ratingsData = await getUserRatings();
+          console.log('Ratings data received:', ratingsData);
+          setUserRatings(ratingsData);
+        } catch (ratingErr) {
+          console.error('Failed to fetch ratings:', ratingErr);
+          setUserRatings([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+        // If API fails, show user data from props as fallback
+        if (user) {
+          setProfileUsername(user.username);
+          setProfileEmail(user.email);
+        }
+      } finally {
+        setIsLoadingProfile(false);
+        setIsLoadingWatchlist(false);
+        setIsLoadingRatings(false);
+      }
     }
+    
+    fetchProfile();
   }, [user]);
+
   const [editUsername, setEditUsername] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editBio, setEditBio] = useState("");
-  const [editAvatar, setEditAvatar] = useState("red");
 
-  const AVATARS = [
-    { id: "red", color: "from-[#E50914] to-[#5A0009]", border: "border-primary" },
-    { id: "blue", color: "from-blue-500 to-blue-900", border: "border-blue-500" },
-    { id: "purple", color: "from-purple-500 to-purple-900", border: "border-purple-500" },
-    { id: "amber", color: "from-amber-400 to-amber-800", border: "border-amber-400" },
-  ];
-
-  function getAvatarGradient(id: string) {
-    return AVATARS.find((a) => a.id === id)?.color ?? AVATARS[0].color;
-  }
-  function getAvatarBorder(id: string) {
-    return AVATARS.find((a) => a.id === id)?.border ?? AVATARS[0].border;
-  }
   function getAvatarInitials(username: string) {
     const parts = username.split(/[^a-zA-Z0-9]/);
     return parts.filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "??";
   }
 
-  const ITEMS = 6;
-  const allWatchlist = [...MOVIES, ...TV_SERIES, ...MOVIES.slice(0, 2)];
-  let filteredWatchlist = allWatchlist;
-  if (watchlistFilter === "movies") filteredWatchlist = allWatchlist.filter(i => i.type === "Movie");
-  else if (watchlistFilter === "tv") filteredWatchlist = allWatchlist.filter(i => i.type === "TV");
+  function convertWatchlistToMovieData(item: WatchlistItem): MovieData {
+    return {
+      id: item.title_id,
+      title: item.name_fa,
+      originalTitle: item.name_en,
+      img: item.poster_url || '/placeholder.jpg',
+      rating: item.score || 0,
+      year: item.release_year,
+      duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
+                item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
+      age: item.age_rating,
+      summary: '',
+      genres: item.genres?.split(', ') || [],
+      type: item.t_type === 'S' ? 'TV' : 'Movie',
+      voteCount: 0,
+      similarMovieIds: [],
+      cast: [],
+      crew: [],
+      awards: [],
+      reviews: [],
+    };
+  }
 
-  const totalWlPages = Math.ceil(filteredWatchlist.length / ITEMS);
-  const watchlist = filteredWatchlist.slice((watchlistPage - 1) * ITEMS, watchlistPage * ITEMS);
+  // Filter watchlist items based on selected filter
+  const filteredWatchlistItems = watchlistItems.filter(item => {
+    if (watchlistFilter === "movies") return item.t_type !== 'S';
+    if (watchlistFilter === "tv") return item.t_type === 'S';
+    return true;
+  });
+
+  const ITEMS_PER_PAGE = 6;
+  const totalWlPages = Math.ceil(filteredWatchlistItems.length / ITEMS_PER_PAGE);
+  const paginatedWatchlist = filteredWatchlistItems.slice(
+    (watchlistPage - 1) * ITEMS_PER_PAGE, 
+    watchlistPage * ITEMS_PER_PAGE
+  );
 
   const stats = [
-    { label: t.profile.rated, value: ratedTitles.length },
-    { label: t.profile.reviews, value: ratedTitles.filter(r => r.review.trim().length > 0).length },
-    { label: t.profile.wantToWatch, value: 112 },
-    { label: t.profile.watching, value: 7 },
-    { label: t.profile.watched, value: 583 },
+    { label: t.profile.rated, value: profileStats.total_rated },
+    { label: t.profile.reviews, value: profileStats.total_written },
+    { label: t.profile.wantToWatch, value: profileStats.total_want_to_watch },
+    { label: t.profile.watching, value: profileStats.total_watching },
+    { label: t.profile.watched, value: profileStats.total_watched },
   ];
 
   const REVIEWS_PER_PAGE = 5;
-  const totalReviewPages = Math.ceil(ratedTitles.length / REVIEWS_PER_PAGE);
-  const paginatedReviews = ratedTitles.slice((reviewsPage - 1) * REVIEWS_PER_PAGE, reviewsPage * REVIEWS_PER_PAGE);
+  const totalReviewPages = Math.ceil(userRatings.length / REVIEWS_PER_PAGE);
+  const paginatedReviews = userRatings.slice((reviewsPage - 1) * REVIEWS_PER_PAGE, reviewsPage * REVIEWS_PER_PAGE);
 
-  function openEdit(entry: RatedEntry) {
-    setEditingId(entry.id);
-    setEditScore(entry.score);
-    setEditComment(entry.review);
+  function openEdit(entry: UserRating) {
+    setEditingId(entry.title_id);
+    setEditScore(entry.rating_score);
+    setEditComment(entry.review_text || "");
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (editingId === null || editScore === 0) return;
-    onEditRating(editingId, editScore, editComment);
-    setEditingId(null);
+    
+    try {
+      await addOrUpdateRating(editingId, {
+        score: editScore,
+        comment: editComment,
+        is_spoiler: false,
+      });
+      
+      // Update local state
+      setUserRatings(prev => prev.map(r => 
+        r.title_id === editingId 
+          ? { ...r, rating_score: editScore, review_text: editComment }
+          : r
+      ));
+      
+      onEditRating(editingId, editScore, editComment);
+      setEditingId(null);
+    } catch (error) {
+      console.error('Error updating rating:', error);
+      alert('خطا در به روزرسانی امتیاز');
+    }
   }
 
   function confirmDelete(id: number) {
     setConfirmDeleteId(id);
   }
 
-  function executeDelete() {
+  async function executeDelete() {
     if (confirmDeleteId !== null) {
-      onDeleteRating(confirmDeleteId);
-      setConfirmDeleteId(null);
-      const newTotal = ratedTitles.length - 1;
-      const maxPage = Math.ceil(newTotal / REVIEWS_PER_PAGE) || 1;
-      if (reviewsPage > maxPage) setReviewsPage(maxPage);
+      try {
+        await deleteRating(confirmDeleteId);
+        
+        // Update local state
+        setUserRatings(prev => prev.filter(r => r.title_id !== confirmDeleteId));
+        onDeleteRating(confirmDeleteId);
+        
+        setConfirmDeleteId(null);
+        const newTotal = userRatings.length - 1;
+        const maxPage = Math.ceil(newTotal / REVIEWS_PER_PAGE) || 1;
+        if (reviewsPage > maxPage) setReviewsPage(maxPage);
+      } catch (error) {
+        console.error('Error deleting rating:', error);
+        alert('خطا در حذف امتیاز');
+      }
     }
+  }
+
+  if (isLoadingProfile) {
+    return (
+      <div className="max-w-[1440px] mx-auto px-8 py-32 text-center">
+        <div className="inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+        <p className="text-white/40 mt-4">در حال بارگذاری پروفایل...</p>
+      </div>
+    );
   }
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-12">
       <div className="flex items-start gap-6 mb-12 pb-12 border-b border-white/8 dark:border-white/8 light:border-black/8">
-        <div className={`w-24 h-24 rounded-full bg-gradient-to-br ${getAvatarGradient(profileAvatar)} flex items-center justify-center text-white text-3xl font-bold flex-shrink-0 shadow-2xl`}
-          style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
-          {getAvatarInitials(profileUsername)}
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#E50914] to-[#5A0009] flex items-center justify-center text-white text-3xl font-bold flex-shrink-0 shadow-2xl overflow-hidden">
+          {profilePhotoUrl ? (
+            <img src={profilePhotoUrl} alt={profileUsername} className="w-full h-full object-cover" />
+          ) : (
+            getAvatarInitials(profileUsername)
+          )}
         </div>
         <div className="flex-1">
           <h1 className="text-[28px] font-bold text-white dark:text-white light:text-black mb-1" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
             {profileUsername}
           </h1>
           <p className="text-white/35 dark:text-white/35 light:text-black/35 text-sm mb-1 font-mono">{profileEmail}</p>
-          <p className="text-white/25 dark:text-white/25 light:text-black/25 text-xs flex items-center gap-1.5">
-            <Calendar size={11} /> {t.profile.memberSince} فوریه ۲۰۱۹
+          <p className="text-white/25 text-xs flex items-center gap-1.5">
+            <Calendar size={11} /> {t.profile.memberSince} 
+            {profileJoinDate ? new Date(profileJoinDate).toLocaleDateString('fa-IR') : 'اخیرا'}
           </p>
-          {profileBio && <p className="text-white/40 dark:text-white/40 light:text-black/40 text-sm mt-2 max-w-md">{profileBio}</p>}
         </div>
         <button
-          onClick={() => { setEditUsername(profileUsername); setEditEmail(profileEmail); setEditBio(profileBio); setEditAvatar(profileAvatar); setShowEditProfile(true); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/15 dark:border-white/15 light:border-black/15 text-white/50 dark:text-white/50 light:text-black/50 text-sm hover:border-white/30 dark:hover:border-white/30 light:hover:border-black/30 hover:text-white dark:hover:text-white light:hover:text-black transition-all"
+          onClick={() => { 
+            setEditUsername(profileUsername); 
+            setEditEmail(profileEmail); 
+            setEditPhotoUrl(profilePhotoUrl || "");
+            setEditPassword("");
+            setShowEditProfile(true); 
+          }}
+          className="..."
         >
           <Edit2 size={14} /> {t.profile.editProfile}
         </button>
       </div>
 
+      {/* Stats Cards - Now showing real data from API */}
       <div className="grid grid-cols-5 gap-4 mb-14">
         {stats.map((s) => (
           <div key={s.label} className="bg-card rounded-2xl p-6 border border-white/8 dark:border-white/8 light:border-black/8 text-center hover:border-white/15 dark:hover:border-white/15 light:hover:border-black/15 transition-colors">
@@ -2287,44 +2475,87 @@ function ProfilePage({
         ))}
       </div>
 
+      {/* Watchlist Section - Now showing real data from API */}
       <section className="mb-14">
         <SectionHeader title={t.profile.watchlist} />
-        <div className="flex gap-1 mb-6 bg-card border border-white/8 dark:border-white/8 light:border-black/8 rounded-xl p-1 w-fit">
-          {(["all", "movies", "tv"] as const).map((filter) => (
-            <button
-              key={filter}
-              onClick={() => { setWatchlistFilter(filter); setWatchlistPage(1); }}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
-                watchlistFilter === filter ? "bg-primary text-white shadow-lg shadow-[#E50914]/20" : "text-white/50 dark:text-white/50 light:text-black/50 hover:text-white dark:hover:text-white light:hover:text-black"
-              }`}
-            >
-              {filter === "tv" ? t.profile.tvShows : filter === "movies" ? t.browse.movies : t.browse.all}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-6 gap-4 mb-6">
-          {watchlist.map((m) => (
-            <MovieCard key={m.id} movie={m} onClick={() => setPage(m.type === "TV" ? "tv" : "movie", m)} showTypeBadge />
-          ))}
-        </div>
-        {totalWlPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button onClick={() => setWatchlistPage((p) => Math.max(1, p - 1))} disabled={watchlistPage === 1} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm">
-              <ChevronRight size={14} /> {t.browse.previous}
-            </button>
-            {Array.from({ length: totalWlPages }, (_, i) => i + 1).map((p) => (
-              <button key={p} onClick={() => setWatchlistPage(p)} className={`w-10 h-10 rounded-xl text-sm font-medium transition-all ${p === watchlistPage ? "bg-primary text-white shadow-lg shadow-[#E50914]/20" : "bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black"}`}>{toPersianDigits(p)}</button>
-            ))}
-            <button onClick={() => setWatchlistPage((p) => Math.min(totalWlPages, p + 1))} disabled={watchlistPage === totalWlPages} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm">
-              {t.browse.next} <ChevronLeft size={14} />
-            </button>
+        {isLoadingWatchlist ? (
+          <div className="text-center py-12">
+            <div className="inline-block w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            <p className="text-white/40 mt-3 text-sm">در حال بارگذاری...</p>
           </div>
+        ) : watchlistItems.length === 0 ? (
+          <div className="text-center py-16 bg-card rounded-2xl border border-white/8 dark:border-white/8 light:border-black/12">
+            <Bookmark size={32} className="text-white/15 dark:text-white/15 light:text-black/20 mx-auto mb-3" />
+            <p className="text-white/40 dark:text-white/40 light:text-black/50 text-sm">هنوز چیزی به لیست تماشا اضافه نکرده‌اید</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-1 mb-6 bg-card border border-white/8 dark:border-white/8 light:border-black/8 rounded-xl p-1 w-fit">
+              {(["all", "movies", "tv"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => { setWatchlistFilter(filter); setWatchlistPage(1); }}
+                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
+                    watchlistFilter === filter ? "bg-primary text-white shadow-lg shadow-[#E50914]/20" : "text-white/50 dark:text-white/50 light:text-black/50 hover:text-white dark:hover:text-white light:hover:text-black"
+                  }`}
+                >
+                  {filter === "tv" ? t.profile.tvShows : filter === "movies" ? t.browse.movies : t.browse.all}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-6 gap-4 mb-6">
+              {paginatedWatchlist.map((item) => {
+                const movieData = convertWatchlistToMovieData(item);
+                return (
+                  <MovieCard 
+                    key={item.title_id} 
+                    movie={movieData} 
+                    onClick={() => setPage(movieData.type === "TV" ? "tv" : "movie", movieData)} 
+                    showTypeBadge 
+                  />
+                );
+              })}
+            </div>
+            {totalWlPages > 1 && (
+              <div className="flex items-center justify-center gap-2">
+                <button 
+                  onClick={() => setWatchlistPage((p) => Math.max(1, p - 1))} 
+                  disabled={watchlistPage === 1} 
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
+                >
+                  <ChevronRight size={14} /> {t.browse.previous}
+                </button>
+                {Array.from({ length: totalWlPages }, (_, i) => i + 1).map((p) => (
+                  <button 
+                    key={p} 
+                    onClick={() => setWatchlistPage(p)} 
+                    className={`w-10 h-10 rounded-xl text-sm font-medium transition-all ${p === watchlistPage ? "bg-primary text-white shadow-lg shadow-[#E50914]/20" : "bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black"}`}
+                  >
+                    {toPersianDigits(p)}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => setWatchlistPage((p) => Math.min(totalWlPages, p + 1))} 
+                  disabled={watchlistPage === totalWlPages} 
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
+                >
+                  {t.browse.next} <ChevronLeft size={14} />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
 
+      {/* Rest of your existing ProfilePage code (ratings and reviews section, edit modals, etc.) remains the same */}
       <section>
-        <SectionHeader title={t.profile.ratingsAndReviews} />
-        {ratedTitles.length === 0 ? (
+      <SectionHeader title={t.profile.ratingsAndReviews} />
+      {isLoadingRatings ? (
+        <div className="text-center py-12">
+          <div className="inline-block w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+          <p className="text-white/40 mt-3 text-sm">در حال بارگذاری نظرات...</p>
+        </div>
+      ) : userRatings.length === 0 ? (
           <div className="text-center py-16 bg-card rounded-2xl border border-white/8 dark:border-white/8 light:border-black/12">
             <Star size={32} className="text-white/15 dark:text-white/15 light:text-black/20 mx-auto mb-3" />
             <p className="text-white/40 dark:text-white/40 light:text-black/50 text-sm">{t.profile.noRatingsYet}</p>
@@ -2332,58 +2563,104 @@ function ProfilePage({
         ) : (
           <>
             <div className="space-y-4 mb-6">
-              {paginatedReviews.map((r) => {
-                const allContent = [...MOVIES, ...TV_SERIES];
-                const movieData = allContent.find(m => m.id === r.id);
-                return (
-                <div key={r.id} className="flex gap-5 bg-card rounded-2xl p-5 border border-white/8 dark:border-white/8 light:border-black/12 hover:border-white/15 dark:hover:border-white/15 light:hover:border-primary/30 transition-all">
-                  <img
-                    src={r.img}
-                    alt={r.title}
-                    className="w-14 h-20 object-cover rounded-lg flex-shrink-0 border border-white/10 dark:border-white/10 light:border-black/15 cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => movieData && setPage(r.type === "TV" ? "tv" : "movie", movieData)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3
-                          onClick={() => movieData && setPage(r.type === "TV" ? "tv" : "movie", movieData)}
-                          className="text-foreground font-semibold text-sm hover:text-primary transition-colors cursor-pointer"
-                        >
-                          {r.title}
-                        </h3>
-                        <p className="text-white/35 dark:text-white/35 light:text-black/40 text-xs mt-0.5">{r.date}</p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                        <div className="flex items-center gap-1">
-                          <RatingDisplay rating={r.score} size="sm" />
-                          <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">/{toPersianDigits(10)}</span>
-                        </div>
-                        <button
-                          onClick={() => openEdit(r)}
-                          className="p-1.5 text-white/30 dark:text-white/30 light:text-black/40 hover:text-white/70 dark:hover:text-white/70 light:hover:text-black/70 hover:bg-white/8 dark:hover:bg-white/8 light:hover:bg-black/8 rounded-lg transition-all"
-                          title={t.profile.edit}
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(r.id)}
-                          className="p-1.5 text-white/30 dark:text-white/30 light:text-black/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
-                          title={t.profile.delete}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+            {paginatedReviews.map((rating) => (
+              <div key={rating.title_id} className="flex gap-5 bg-card rounded-2xl p-5 border border-white/8 dark:border-white/8 light:border-black/12 hover:border-white/15 dark:hover:border-white/15 light:hover:border-primary/30 transition-all">
+                <img
+                  src={rating.poster_url || '/placeholder.jpg'}
+                  alt={rating.title_name_fa}
+                  className="w-14 h-20 object-cover rounded-lg flex-shrink-0 border border-white/10 dark:border-white/10 light:border-black/15 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => {
+                    // Navigate to movie or TV page
+                    const movieData: MovieData = {
+                      id: rating.title_id,
+                      title: rating.title_name_fa,
+                      originalTitle: rating.title_name_en,
+                      img: rating.poster_url || '/placeholder.jpg',
+                      rating: rating.rating_score,
+                      year: new Date(rating.rating_date).getFullYear(),
+                      duration: 'نامشخص',
+                      age: 'نامشخص',
+                      summary: '',
+                      genres: [],
+                      type: rating.t_type === 'S' ? 'TV' : 'Movie',
+                      voteCount: 0,
+                      similarMovieIds: [],
+                      cast: [],
+                      crew: [],
+                      awards: [],
+                      reviews: [],
+                    };
+                    setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
+                  }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3
+                        onClick={() => {
+                          const movieData: MovieData = {
+                            id: rating.title_id,
+                            title: rating.title_name_fa,
+                            originalTitle: rating.title_name_en,
+                            img: rating.poster_url || '/placeholder.jpg',
+                            rating: rating.rating_score,
+                            year: new Date(rating.rating_date).getFullYear(),
+                            duration: 'نامشخص',
+                            age: 'نامشخص',
+                            summary: '',
+                            genres: [],
+                            type: rating.t_type === 'S' ? 'TV' : 'Movie',
+                            voteCount: 0,
+                            similarMovieIds: [],
+                            cast: [],
+                            crew: [],
+                            awards: [],
+                            reviews: [],
+                          };
+                          setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
+                        }}
+                        className="text-foreground font-semibold text-sm hover:text-primary transition-colors cursor-pointer"
+                      >
+                        {rating.title_name_fa}
+                      </h3>
+                      <p className="text-white/35 dark:text-white/35 light:text-black/40 text-xs mt-0.5">
+                        {new Date(rating.rating_date).toLocaleDateString('fa-IR')}
+                      </p>
                     </div>
-                    {r.review ? (
-                      <p className="text-white/45 dark:text-white/45 light:text-black/55 text-sm leading-relaxed line-clamp-2">{r.review}</p>
-                    ) : (
-                      <p className="text-white/20 dark:text-white/20 light:text-black/30 text-xs italic">{t.profile.noWrittenReview}</p>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                      <div className="flex items-center gap-1">
+                        <RatingDisplay rating={rating.rating_score} size="sm" />
+                        <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">/{toPersianDigits(10)}</span>
+                      </div>
+                      <button
+                        onClick={() => openEdit(rating)}
+                        className="p-1.5 text-white/30 dark:text-white/30 light:text-black/40 hover:text-white/70 dark:hover:text-white/70 light:hover:text-black/70 hover:bg-white/8 dark:hover:bg-white/8 light:hover:bg-black/8 rounded-lg transition-all"
+                        title={t.profile.edit}
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        onClick={() => confirmDelete(rating.title_id)}
+                        className="p-1.5 text-white/30 dark:text-white/30 light:text-black/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                        title={t.profile.delete}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
+                  {rating.review_text ? (
+                    <div>
+                      <p className="text-white/45 dark:text-white/45 light:text-black/55 text-sm leading-relaxed line-clamp-2">{rating.review_text}</p>
+                      {rating.is_spoiler && (
+                        <span className="inline-block mt-1 text-xs text-amber-500">⚠️ حاوی اسپویلر</span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-white/20 dark:text-white/20 light:text-black/30 text-xs italic">{t.profile.noWrittenReview}</p>
+                  )}
                 </div>
-              );
-              })}
+              </div>
+            ))}
             </div>
             {totalReviewPages > 1 && (
               <div className="flex items-center justify-center gap-2">
@@ -2402,6 +2679,7 @@ function ProfilePage({
         )}
       </section>
 
+      {/* Edit Profile Modal */}
       {showEditProfile && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setShowEditProfile(false)}>
           <div className="bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -2410,23 +2688,6 @@ function ProfilePage({
               <button onClick={() => setShowEditProfile(false)} className="text-white/40 dark:text-white/40 light:text-black/40 hover:text-white dark:hover:text-white light:hover:text-black transition-colors"><X size={20} /></button>
             </div>
             <div className="space-y-5">
-              <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-3">{t.editProfile.avatarColor}</label>
-                <div className="flex items-center gap-4">
-                  {AVATARS.map((av) => (
-                    <button
-                      key={av.id}
-                      onClick={() => setEditAvatar(av.id)}
-                      className={`relative w-14 h-14 rounded-full bg-gradient-to-br ${av.color} flex items-center justify-center text-white font-bold transition-all ${
-                        editAvatar === av.id ? `ring-2 ring-offset-2 ring-offset-card ${av.border} scale-110` : "opacity-60 hover:opacity-90"
-                      }`}
-                      style={{ fontFamily: "'Vazirmatn', sans-serif" }}
-                    >
-                      {getAvatarInitials(editUsername || profileUsername)}
-                    </button>
-                  ))}
-                </div>
-              </div>
               <div>
                 <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">{t.editProfile.username}</label>
                 <input
@@ -2445,15 +2706,61 @@ function ProfilePage({
                   className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors"
                 />
               </div>
+
+              {/* Add this after the email input field and before the DELETE ACCOUNT section */}
               <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">{t.editProfile.bio}</label>
-                <textarea
-                  rows={3}
-                  value={editBio}
-                  onChange={(e) => setEditBio(e.target.value)}
-                  className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors resize-none"
+                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">
+                  آدرس عکس پروفایل
+                </label>
+                <input
+                  type="url"
+                  value={editPhotoUrl}
+                  onChange={(e) => setEditPhotoUrl(e.target.value)}
+                  placeholder="https://example.com/photo.jpg"
+                  className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors"
                 />
               </div>
+
+              <div>
+                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">
+                  رمز عبور جدید (اختیاری)
+                </label>
+                <input
+                  type="password"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="رمز عبور جدید"
+                  className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors"
+                />
+              </div>
+
+              {/* DELETE ACCOUNT BUTTON - ADD THIS HERE */}
+              <div className="pt-4 border-t border-white/10">
+                <button
+                  onClick={async () => {
+                    if (window.confirm('آیا از حذف حساب کاربری خود اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) {
+                      try {
+                        await deleteProfile();
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('user_data');
+                        setPage("home");
+                        window.location.reload();
+                      } catch (error) {
+                        console.error('Error deleting profile:', error);
+                        alert('خطا در حذف حساب کاربری');
+                      }
+                    }
+                  }}
+                  className="w-full px-6 py-3 bg-red-600/20 border border-red-500/50 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-600/30 transition-all"
+                >
+                  حذف حساب کاربری
+                </button>
+                <p className="text-white/30 text-xs text-center mt-2">
+                  این عمل تمام اطلاعات شما را برای همیشه حذف خواهد کرد
+                </p>
+              </div>
+
+              {/* SAVE AND CANCEL BUTTONS */}
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowEditProfile(false)}
@@ -2462,12 +2769,48 @@ function ProfilePage({
                   {t.editProfile.cancel}
                 </button>
                 <button
-                  onClick={() => {
-                    setProfileUsername(editUsername.trim() || profileUsername);
-                    setProfileEmail(editEmail.trim() || profileEmail);
-                    setProfileBio(editBio);
-                    setProfileAvatar(editAvatar);
-                    setShowEditProfile(false);
+                  onClick={async () => {
+                    try {
+                      const updateData: { 
+                        username?: string; 
+                        password?: string;
+                        photo_url?: string;
+                      } = {};
+                      
+                      if (editUsername.trim() && editUsername !== profileUsername) {
+                        updateData.username = editUsername.trim();
+                      }
+                      
+                      if (editPassword.trim()) {
+                        updateData.password = editPassword.trim();
+                      }
+                      
+                      if (editPhotoUrl.trim() && editPhotoUrl !== profilePhotoUrl) {
+                        updateData.photo_url = editPhotoUrl.trim();
+                      }
+                      
+                      if (Object.keys(updateData).length > 0) {
+                        await updateProfile(updateData);
+                        
+                        if (updateData.username) setProfileUsername(updateData.username);
+                        if (updateData.photo_url) setProfilePhotoUrl(updateData.photo_url);
+                        
+                        const currentUser = JSON.parse(localStorage.getItem('user_data') || '{}');
+                        const updatedUser = { ...currentUser, ...updateData };
+                        localStorage.setItem('user_data', JSON.stringify(updatedUser));
+                        
+                        alert('پروفایل با موفقیت به روزرسانی شد');
+                      } else {
+                        alert('هیچ تغییری اعمال نشده است');
+                      }
+                      
+                      setShowEditProfile(false);
+                      setEditPassword("");
+                      setEditPhotoUrl("");
+                    } catch (error) {
+                      console.error('Error updating profile:', error);
+                      alert('خطا در به روزرسانی پروفایل');
+                    }
                   }}
                   className="flex-1 px-6 py-3 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent active:bg-primary/90 transition-all shadow-lg shadow-[#E50914]/20 hover:shadow-[#E50914]/40"
                 >
@@ -2479,9 +2822,10 @@ function ProfilePage({
         </div>
       )}
 
+      {/* Edit Rating Modal */}
       {editingId !== null && (() => {
-        const entry = ratedTitles.find(r => r.id === editingId);
-        if (!entry) return null;
+        const rating = userRatings.find(r => r.title_id === editingId);
+        if (!rating) return null;
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setEditingId(null)}>
             <div className="bg-card border border-white/15 dark:border-white/15 light:border-black/20 rounded-2xl p-8 max-w-lg w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -2489,7 +2833,7 @@ function ProfilePage({
                 <h2 className="text-2xl font-bold text-foreground" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>{t.editRating.title}</h2>
                 <button onClick={() => setEditingId(null)} className="text-white/40 dark:text-white/40 light:text-black/40 hover:text-white dark:hover:text-white light:hover:text-black transition-colors"><X size={20} /></button>
               </div>
-              <p className="text-white/40 dark:text-white/40 light:text-black/50 text-sm mb-6">{entry.title}</p>
+              <p className="text-white/40 dark:text-white/40 light:text-black/50 text-sm mb-6">{rating.title_name_fa}</p>
               <div className="space-y-6">
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -2531,9 +2875,10 @@ function ProfilePage({
         );
       })()}
 
+      {/* Delete Confirmation Modal */}
       {confirmDeleteId !== null && (() => {
-        const entry = ratedTitles.find(r => r.id === confirmDeleteId);
-        if (!entry) return null;
+        const rating = userRatings.find(r => r.title_id === confirmDeleteId);
+        if (!rating) return null;
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setConfirmDeleteId(null)}>
             <div className="bg-card border border-white/15 dark:border-white/15 light:border-black/20 rounded-2xl p-8 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -2542,7 +2887,7 @@ function ProfilePage({
                 <button onClick={() => setConfirmDeleteId(null)} className="text-white/40 dark:text-white/40 light:text-black/40 hover:text-white dark:hover:text-white light:hover:text-black transition-colors"><X size={18} /></button>
               </div>
               <p className="text-white/55 dark:text-white/55 light:text-black/60 text-sm mb-1">{t.deleteConfirm.removeRatingFor}</p>
-              <p className="text-foreground font-semibold mb-4">{entry.title}</p>
+              <p className="text-foreground font-semibold mb-4">{rating.title_name_fa}</p>
               <p className="text-white/35 dark:text-white/35 light:text-black/45 text-xs mb-6">{t.deleteConfirm.permanentDelete}</p>
               <div className="flex gap-3">
                 <button onClick={() => setConfirmDeleteId(null)} className="flex-1 px-5 py-3 bg-white/8 dark:bg-white/8 light:bg-white border border-white/15 dark:border-white/15 light:border-black/20 text-foreground rounded-lg text-sm font-medium hover:bg-white/12 dark:hover:bg-white/12 light:hover:bg-black/5 transition-all">{t.deleteConfirm.cancel}</button>
@@ -2656,9 +3001,9 @@ export default function App() {
     setRatedTitles((prev) => [entry, ...prev]);
   }
 
-  function handleEditRating(id: number, score: number, review: string) {
+  function handleEditRating(id: number, score: number, review: string, isSpoiler: boolean) {
     setRatedTitles((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, score, review } : r))
+      prev.map((r) => (r.id === id ? { ...r, score, review, isSpoiler } : r))
     );
   }
 
@@ -2708,10 +3053,10 @@ export default function App() {
         />
       )}
       {page === "movie" && selectedMovie && (
-        <MovieDetailPage movie={selectedMovie} setPage={navigate} navigateBack={navigateBack} ratedTitles={ratedTitles} onRate={handleRate} setGlobalSearch={setGlobalSearch} />
+        <MovieDetailPage movie={selectedMovie} setPage={navigate} navigateBack={navigateBack} ratedTitles={ratedTitles} onRate={handleRate} setGlobalSearch={setGlobalSearch} isLoggedIn={isLoggedIn} onAuthRequest={() => setAuthGateModal("login")} />
       )}
       {page === "tv" && selectedMovie && (
-        <TVDetailPage movie={selectedMovie} setPage={navigate} navigateBack={navigateBack} ratedTitles={ratedTitles} onRate={handleRate} setGlobalSearch={setGlobalSearch} />
+        <TVDetailPage movie={selectedMovie} setPage={navigate} navigateBack={navigateBack} ratedTitles={ratedTitles} onRate={handleRate} setGlobalSearch={setGlobalSearch} isLoggedIn={isLoggedIn} onAuthRequest={() => setAuthGateModal("login")} />
       )}
       {page === "browse" && (
         <BrowsePage setPage={navigate} globalSearch={globalSearch} setGlobalSearch={setGlobalSearch} />
