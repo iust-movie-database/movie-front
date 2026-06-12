@@ -514,7 +514,6 @@ export async function getUserWatchlist(forceRefresh: boolean = false): Promise<W
       
       if (response.ok) {
         let data = await response.json();
-        // تبدیل status به فرمت frontend
         data = data.map((item: WatchlistItem) => ({
           ...item,
           status: normalizeBackendStatus(item.status)
@@ -629,34 +628,14 @@ export async function deleteProfile(password?: string): Promise<{ success: boole
 // ============ Ratings API Functions ============
 
 export async function getUserRatings(): Promise<UserRating[]> {
-  const endpoints = [
-    '/user/ratings',
-    '/ratings/user', 
-    '/my-ratings',
-    '/reviews/user',
-    '/user/rating'
-  ];
-  
-  for (const endpoint of endpoints) {
+  const storedRatings = localStorage.getItem('user_ratings');
+  if (storedRatings) {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: getAuthHeaders(),
-      });
-      
-      if (response.ok) {
-        const data = await handleResponse<UserRating[]>(response);
-        if (data && Array.isArray(data)) {
-          console.log(`Ratings fetched from ${endpoint}:`, data.length);
-          return data;
-        }
-      }
+      return JSON.parse(storedRatings);
     } catch (e) {
-      console.log(`Endpoint ${endpoint} failed:`, e);
-      continue;
+      console.error('Failed to parse stored ratings', e);
     }
   }
-  
-  console.warn('Could not fetch user ratings, returning empty array');
   return [];
 }
 
@@ -665,25 +644,110 @@ export async function addOrUpdateRating(titleId: number, data: {
   comment: string;
   is_spoiler: boolean;
 }): Promise<ApiResponse> {
-  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-  return handleResponse<ApiResponse>(response);
+  const token = getToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (response.ok) {
+      const titleDetails = await getTitleDetails(titleId);
+      const userRating: UserRating = {
+        title_id: titleId,
+        title_name_fa: titleDetails.name_fa,
+        title_name_en: titleDetails.name_en,
+        poster_url: titleDetails.poster_url || '',
+        rating_score: data.score,
+        rating_date: new Date().toISOString().split('T')[0],
+        review_text: data.comment,
+        is_spoiler: data.is_spoiler,
+        t_type: titleDetails.t_type
+      };
+      saveUserRating(userRating);
+      return handleResponse<ApiResponse>(response);
+    }
+  } catch (error) {
+    console.error('Server error, saving locally only:', error);
+  }
+  
+  try {
+    const titleDetails = await getTitleDetails(titleId);
+    const userRating: UserRating = {
+      title_id: titleId,
+      title_name_fa: titleDetails.name_fa,
+      title_name_en: titleDetails.name_en,
+      poster_url: titleDetails.poster_url || '',
+      rating_score: data.score,
+      rating_date: new Date().toISOString().split('T')[0],
+      review_text: data.comment,
+      is_spoiler: data.is_spoiler,
+      t_type: titleDetails.t_type
+    };
+    saveUserRating(userRating);
+  } catch (error) {
+    console.error('Failed to get title details for local save:', error);
+  }
+  
+  return { success: true, message: 'Rating saved locally' };
 }
 
 export async function deleteRating(titleId: number): Promise<ApiResponse> {
-  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-  return handleResponse<ApiResponse>(response);
+  const token = getToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  deleteUserRating(titleId);
+ 
+  try {
+    const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    
+    if (response.ok) {
+      return handleResponse<ApiResponse>(response);
+    }
+  } catch (error) {
+    console.error('Server error, but removed locally:', error);
+  }
+  
+  return { success: true, message: 'Rating removed locally' };
 }
 
+// ============ User Ratings LocalStorage Functions ============
+
+export function saveUserRating(rating: UserRating): void {
+  const storedRatings = localStorage.getItem('user_ratings');
+  let ratings: UserRating[] = storedRatings ? JSON.parse(storedRatings) : [];
+  
+  const existingIndex = ratings.findIndex(r => r.title_id === rating.title_id);
+  if (existingIndex >= 0) {
+    ratings[existingIndex] = rating;
+  } else {
+    ratings = [rating, ...ratings];
+  }
+  
+  localStorage.setItem('user_ratings', JSON.stringify(ratings));
+}
+
+export function deleteUserRating(titleId: number): void {
+  const storedRatings = localStorage.getItem('user_ratings');
+  if (storedRatings) {
+    let ratings: UserRating[] = JSON.parse(storedRatings);
+    ratings = ratings.filter(r => r.title_id !== titleId);
+    localStorage.setItem('user_ratings', JSON.stringify(ratings));
+  }
+}
 // ============ Homepage APIs ============
 
 export async function getHero(limit: number = 5): Promise<HeroTitle[]> {

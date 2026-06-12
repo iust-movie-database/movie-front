@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Star, Bookmark, BookmarkCheck, Search, ChevronLeft, ChevronRight,
-  ChevronDown, X, Edit2, Trash2, Calendar, Clock, Sun, Moon,
+  ChevronDown, X, Edit2, Trash2, Calendar, Clock, Sun, Moon, Award, Filter, Mail, List
 } from "lucide-react";
-import { Award, Filter, Mail, List } from "lucide-react";
+import { ReviewModal } from "./components/ReviewModal";
 import { translations as t, toPersianDigits, formatPersianNumber, genreIcons } from "../i18n/fa";
 import { AuthFlow } from "./components/AuthFlow";
 import {
@@ -58,7 +58,6 @@ import {
   searchTitles
 } from "../services/api";
 
-// Import types from api.ts
 import type { 
   HeroTitle, 
   PopularGenre, 
@@ -895,24 +894,24 @@ function HomePage({
             </div>
           )}
 
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-40 flex items-center gap-8 bg-black/40 backdrop-blur-xl border border-white/20 rounded-full px-6 py-4 shadow-2xl">
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-5 bg-black/40 backdrop-blur-xl border border-white/20 rounded-full px-5 py-2.5 shadow-2xl">
             <button
               onClick={prevSlide}
-              className="p-2.5 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-primary/50 transition-all hover:scale-110 active:scale-95"
+              className="p-2 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-primary/50 transition-all hover:scale-110 active:scale-95"
               aria-label="Previous slide"
             >
-              <ChevronRight size={22} strokeWidth={2.5} />
+              <ChevronRight size={18} strokeWidth={2.5} />
             </button>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               {heroSlides.map((_, i) => (
                 <button
                   key={i}
                   onClick={() => goToSlide(i)}
                   className={`transition-all rounded-full ${
                     i === heroIndex
-                      ? "w-12 h-3 bg-gradient-to-r from-primary to-accent shadow-lg shadow-primary/60"
-                      : "w-3 h-3 bg-white/30 hover:bg-white/50 hover:w-8"
+                      ? "w-10 h-2.5 bg-gradient-to-r from-primary to-accent shadow-lg shadow-primary/60"
+                      : "w-2.5 h-2.5 bg-white/30 hover:bg-white/50 hover:w-6"
                   }`}
                   aria-label={`Go to slide ${i + 1}`}
                 />
@@ -921,10 +920,10 @@ function HomePage({
 
             <button
               onClick={nextSlide}
-              className="p-2.5 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-primary/50 transition-all hover:scale-110 active:scale-95"
+              className="p-2 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-primary/50 transition-all hover:scale-110 active:scale-95"
               aria-label="Next slide"
             >
-              <ChevronLeft size={22} strokeWidth={2.5} />
+              <ChevronLeft size={18} strokeWidth={2.5} />
             </button>
           </div>
         </section>
@@ -1106,6 +1105,8 @@ function MovieDetailPage({
   setGlobalSearch,
   isLoggedIn,
   onAuthRequest,
+  onOpenReviewModal,
+  userReviews,
 }: {
   movie: MovieData;
   setPage: (p: Page, movieData?: MovieData) => void;
@@ -1115,6 +1116,8 @@ function MovieDetailPage({
   setGlobalSearch: (q: string) => void;
   isLoggedIn: boolean;
   onAuthRequest: () => void;
+  onOpenReviewModal: (movie: MovieData) => void;
+  userReviews: RatedEntry[];
 }) {
   const [saved, setSaved] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<WatchlistStatus | null>(null);
@@ -1128,8 +1131,9 @@ function MovieDetailPage({
   const [similarTitles, setSimilarTitles] = useState<SimilarTitle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const existingRating = ratedTitles.find((r) => r.id === movie.id);
+  const myReview = userReviews.find((r) => r.id === movie.id);
 
-  // Check watchlist status on load - با همگام‌سازی از سرور
+  // Check watchlist status on load
   useEffect(() => {
     async function checkWatchlistStatus() {
       if (!isLoggedIn) {
@@ -1205,7 +1209,6 @@ function MovieDetailPage({
     fetchDetails();
   }, [movie.id]);
 
-  // Handle save button click - opens modal
   const handleSaveClick = () => {
     if (!isLoggedIn) {
       onAuthRequest();
@@ -1214,7 +1217,6 @@ function MovieDetailPage({
     setShowWatchlistModal(true);
   };
 
-  // Handle list selection با optimistic update
   const handleSelectList = async (status: WatchlistStatus) => {
     if (!status || !isLoggedIn) {
       if (!isLoggedIn) onAuthRequest();
@@ -1249,19 +1251,6 @@ function MovieDetailPage({
   function goToBrowseWithQuery(q: string) {
     setGlobalSearch(q);
     setPage("browse");
-  }
-
-  function submitRating() {
-    if (pendingScore === 0) return;
-    onRate({
-      id: movie.id,
-      title: movie.title,
-      img: movie.img,
-      type: "Movie",
-      score: pendingScore,
-      review: "",
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    });
   }
 
   if (isLoading) {
@@ -1316,6 +1305,8 @@ function MovieDetailPage({
             </span>
           </div>
           <p className="text-white/60 text-sm leading-relaxed mb-8 max-w-2xl">{details?.summary || movie.summary}</p>
+          
+          {/* دکمه‌های Save و نقد */}
           <div className="flex gap-3 flex-wrap items-center">
             <SaveButton 
               saved={saved}
@@ -1344,37 +1335,36 @@ function MovieDetailPage({
                 }
               }}
             />
-            {existingRating ? (
-              <div className="flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5">
-                <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
-                <span className="text-white/20">·</span>
-                <RatingDisplay rating={existingRating.score} size="sm" />
-                <span className="text-white/35 text-xs">/{toPersianDigits(10)}</span>
-                <button
-                  onClick={() => setPage("profile")}
-                  className="text-white/35 text-xs hover:text-white/70 underline underline-offset-2 transition-colors ml-1"
-                >
-                  {t.detail.editInProfile}
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 bg-[#1A1A1A] border border-white/10 rounded-lg px-4 py-2.5">
-                <span className="text-white/40 text-sm">{t.detail.rate}</span>
-                <HalfStarRating value={pendingScore} onChange={setPendingScore} size={16} />
-                {pendingScore > 0 && (
-                  <>
-                    <span className="text-amber-400 text-sm font-semibold">{toPersianDigits(pendingScore)}/{toPersianDigits(10)}</span>
-                    <button
-                      onClick={submitRating}
-                      className="px-3 py-1 bg-primary text-white text-xs font-semibold rounded-md hover:bg-accent transition-colors ml-1"
-                    >
-                      {t.detail.submit}
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+            
+            {/* دکمه نوشتن نقد */}
+            <button
+              onClick={() => onOpenReviewModal(movie)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                myReview
+                  ? "bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30"
+                  : "bg-white/10 border border-white/20 text-white hover:bg-white/20"
+              }`}
+            >
+              <Star size={16} />
+              {myReview ? "ویرایش نقد" : "نوشتن نقد"}
+            </button>
           </div>
+          
+          {/* نمایش امتیاز قبلی اگر وجود داشته باشد */}
+          {existingRating && !myReview && (
+            <div className="mt-3 flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5 w-fit">
+              <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
+              <span className="text-white/20">·</span>
+              <RatingDisplay rating={existingRating.score} size="sm" />
+              <span className="text-white/35 text-xs">/{toPersianDigits(10)}</span>
+              <button
+                onClick={() => setPage("profile")}
+                className="text-white/35 text-xs hover:text-white/70 underline underline-offset-2 transition-colors ml-1"
+              >
+                {t.detail.editInProfile}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1528,6 +1518,8 @@ function TVDetailPage({
   setGlobalSearch,
   isLoggedIn,
   onAuthRequest,
+  onOpenReviewModal,
+  userReviews,
 }: {
   movie: MovieData;
   setPage: (p: Page, movieData?: MovieData) => void;
@@ -1537,6 +1529,8 @@ function TVDetailPage({
   setGlobalSearch: (q: string) => void;
   isLoggedIn: boolean;
   onAuthRequest: () => void;
+  onOpenReviewModal: (movie: MovieData) => void;
+  userReviews: RatedEntry[];
 }) {
   const [saved, setSaved] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<WatchlistStatus | null>(null);
@@ -1554,8 +1548,9 @@ function TVDetailPage({
   const [isLoading, setIsLoading] = useState(true);
   const tvShow = movie;
   const existingRating = ratedTitles.find((r) => r.id === tvShow.id);
+  const myReview = userReviews.find((r) => r.id === tvShow.id);
 
-  // Check watchlist status on load - با همگام‌سازی از سرور
+  // Check watchlist status on load
   useEffect(() => {
     async function checkWatchlistStatus() {
       if (!isLoggedIn) {
@@ -1567,7 +1562,6 @@ function TVDetailPage({
       console.log('Checking watchlist status for TV series:', tvShow.id);
       
       try {
-        // دریافت تازه از سرور با forceRefresh=true
         const freshWatchlist = await getUserWatchlist(true);
         console.log('Fresh watchlist from server:', freshWatchlist.length, 'items');
         
@@ -1640,7 +1634,6 @@ function TVDetailPage({
     fetchDetails();
   }, [tvShow.id]);
 
-  // Handle save button click - opens modal
   const handleSaveClick = () => {
     if (!isLoggedIn) {
       onAuthRequest();
@@ -1649,7 +1642,6 @@ function TVDetailPage({
     setShowWatchlistModal(true);
   };
 
-  // Handle list selection با optimistic update
   const handleSelectList = async (status: WatchlistStatus) => {
     if (!status || !isLoggedIn) {
       if (!isLoggedIn) onAuthRequest();
@@ -1684,19 +1676,6 @@ function TVDetailPage({
   function goToBrowseWithQuery(q: string) {
     setGlobalSearch(q);
     setPage("browse");
-  }
-
-  function submitRating() {
-    if (pendingScore === 0) return;
-    onRate({
-      id: tvShow.id,
-      title: tvShow.title,
-      img: tvShow.img,
-      type: "TV",
-      score: pendingScore,
-      review: "",
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    });
   }
 
   const episodesBySeason = episodes.reduce((acc, episode) => {
@@ -1772,6 +1751,8 @@ function TVDetailPage({
           <p className="text-white/60 dark:text-white/60 light:text-black/60 text-sm leading-relaxed mb-8 max-w-2xl">
             {details?.summary || tvShow.summary}
           </p>
+          
+          {/* دکمه‌های Save و نقد */}
           <div className="flex gap-3 flex-wrap items-center">
             <SaveButton 
               saved={saved}
@@ -1786,51 +1767,50 @@ function TVDetailPage({
                 try {
                   const token = localStorage.getItem('access_token');
                   if (!token) throw new Error('No token');
-                  await fetch(`http://localhost:8000/saved/${movie.id}`, {
+                  await fetch(`http://localhost:8000/saved/${tvShow.id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` },
                   });
-                  updateWatchlistInLocalStorage(movie.id, null);
+                  updateWatchlistInLocalStorage(tvShow.id, null);
                   setSaved(false);
                   setCurrentStatus(null);
-                  alert(`"${movie.title}" از لیست تماشا حذف شد`);
+                  alert(`"${tvShow.title}" از لیست تماشا حذف شد`);
                 } catch (error) {
                   console.error('Error removing from watchlist:', error);
                   alert('خطا در حذف از لیست تماشا');
                 }
               }}
             />
-            {existingRating ? (
-              <div className="flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5">
-                <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
-                <span className="text-white/20">·</span>
-                <RatingDisplay rating={existingRating.score} size="sm" />
-                <span className="text-white/35 text-xs">/{toPersianDigits(10)}</span>
-                <button
-                  onClick={() => setPage("profile")}
-                  className="text-white/35 text-xs hover:text-white/70 underline underline-offset-2 transition-colors ml-1"
-                >
-                  {t.detail.editInProfile}
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 bg-[#1A1A1A] border border-white/10 rounded-lg px-4 py-2.5">
-                <span className="text-white/40 text-sm">{t.detail.rate}</span>
-                <HalfStarRating value={pendingScore} onChange={setPendingScore} size={16} />
-                {pendingScore > 0 && (
-                  <>
-                    <span className="text-amber-400 text-sm font-semibold">{toPersianDigits(pendingScore)}/{toPersianDigits(10)}</span>
-                    <button
-                      onClick={submitRating}
-                      className="px-3 py-1 bg-primary text-white text-xs font-semibold rounded-md hover:bg-accent transition-colors ml-1"
-                    >
-                      {t.detail.submit}
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+            
+            {/* دکمه نوشتن نقد */}
+            <button
+              onClick={() => onOpenReviewModal(tvShow)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                myReview
+                  ? "bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30"
+                  : "bg-white/10 border border-white/20 text-white hover:bg-white/20"
+              }`}
+            >
+              <Star size={16} />
+              {myReview ? "ویرایش نقد" : "نوشتن نقد"}
+            </button>
           </div>
+          
+          {/* نمایش امتیاز قبلی اگر وجود داشته باشد */}
+          {existingRating && !myReview && (
+            <div className="mt-3 flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5 w-fit">
+              <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
+              <span className="text-white/20">·</span>
+              <RatingDisplay rating={existingRating.score} size="sm" />
+              <span className="text-white/35 text-xs">/{toPersianDigits(10)}</span>
+              <button
+                onClick={() => setPage("profile")}
+                className="text-white/35 text-xs hover:text-white/70 underline underline-offset-2 transition-colors ml-1"
+              >
+                {t.detail.editInProfile}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -2033,7 +2013,7 @@ function TVDetailPage({
         onClose={() => setShowWatchlistModal(false)}
         onSelect={handleSelectList}
         currentStatus={currentStatus}
-        titleName={movie.title}
+        titleName={tvShow.title}
       />
     </div>
   );
@@ -2085,8 +2065,7 @@ function BrowsePage({
     "معمایی": 13,
     "خانوادگی": 14,
   };
-  
-  // تابع جستجو
+
   const performSearch = async () => {
     setIsSearching(true);
     setHasSearched(true);
@@ -2148,7 +2127,6 @@ function BrowsePage({
     }
   };
   
-  // جستجو هنگام تغییر فیلترها
   useEffect(() => {
     const timer = setTimeout(() => {
       performSearch();
@@ -2485,8 +2463,7 @@ function ProfilePage({
   const [watchlistPage, setWatchlistPage] = useState(1);
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [isLoadingWatchlist, setIsLoadingWatchlist] = useState(true);
-  
-  // فیلترهای پیشرفته
+ 
   const [activeTypeFilter, setActiveTypeFilter] = useState<"all" | "movie" | "tv">("all");
   const [activeStatusFilter, setActiveStatusFilter] = useState<WatchlistStatus | "all">("all");
   const [activeSortBy, setActiveSortBy] = useState<"date" | "title" | "year">("date");
@@ -2557,12 +2534,19 @@ function ProfilePage({
           setWatchlistItems(localWatchlist);
         }
         
-        try {
-          const ratingsData = await getUserRatings();
-          setUserRatings(ratingsData || []);
-        } catch (ratingErr) {
+      try {
+        const storedRatings = localStorage.getItem('user_ratings');
+        if (storedRatings) {
+          const ratingsData = JSON.parse(storedRatings);
+          setUserRatings(ratingsData);
+          console.log('✅ Ratings loaded from localStorage:', ratingsData.length);
+        } else {
           setUserRatings([]);
         }
+      } catch (ratingErr) {
+        console.error('Failed to load ratings from localStorage:', ratingErr);
+        setUserRatings([]);
+      }
       } catch (error) {
         if (user) {
           setProfileUsername(user.username);
@@ -3251,6 +3235,10 @@ export default function App() {
     return "dark";
   });
 
+  const [userReviews, setUserReviews] = useState<RatedEntry[]>(SEED_RATINGS);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [currentReviewTitle, setCurrentReviewTitle] = useState<MovieData | null>(null);
+
   // Load user from localStorage on app start
   useEffect(() => {
     const userData = localStorage.getItem('user_data');
@@ -3278,7 +3266,10 @@ export default function App() {
   }
 
   function navigate(p: Page, movieData?: MovieData) {
+    console.log('Navigating to:', p, 'isLoggedIn:', isLoggedIn);
+    
     if (p === "profile" && !isLoggedIn) {
+      console.log('Profile access denied, showing auth modal');
       setAuthGateModal("login");
       return;
     }
@@ -3298,27 +3289,81 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
+  function handleOpenReviewModal(movie: MovieData) {
+    if (!isLoggedIn) {
+      setAuthGateModal("login");
+      return;
+    }
+    setCurrentReviewTitle(movie);
+    setShowReviewModal(true);
+  }
+
+  async function handleSubmitReview(data: { rating: number; reviewText: string }) {
+    if (!currentReviewTitle) return;
+    
+    try {
+      await addOrUpdateRating(currentReviewTitle.id, {
+        score: data.rating,
+        comment: data.reviewText,
+        is_spoiler: false,
+      });
+
+      const existingIndex = userReviews.findIndex(r => r.id === currentReviewTitle.id);
+      const newReview: RatedEntry = {
+        id: currentReviewTitle.id,
+        title: currentReviewTitle.title,
+        img: currentReviewTitle.img,
+        type: currentReviewTitle.type === "TV" ? "TV" : "Movie",
+        score: data.rating,
+        review: data.reviewText,
+        date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      };
+      
+      if (existingIndex !== -1) {
+        const newReviews = [...userReviews];
+        newReviews[existingIndex] = newReview;
+        setUserReviews(newReviews);
+      } else {
+        setUserReviews([newReview, ...userReviews]);
+      }
+      
+      setShowReviewModal(false);
+      setCurrentReviewTitle(null);
+    } catch (error) {
+      console.error('Error saving review:', error);
+      alert('خطا در ذخیره نقد. لطفاً دوباره تلاش کنید.');
+    }
+  }
+
   async function handleLogin() {
+    console.log('Handling login...');
+    
+    const token = localStorage.getItem('access_token');
     const userData = localStorage.getItem('user_data');
+    
+    console.log('Token exists:', !!token);
+    console.log('User data exists:', !!userData);
+    
     if (userData) {
       try {
         const user = JSON.parse(userData);
         setCurrentUser(user);
+        console.log('User set:', user);
       } catch (e) {
-        console.error('Failed to parse user data');
+        console.error('Failed to parse user data', e);
       }
     }
+    
     setIsLoggedIn(true);
     setAuthGateModal(null);
     
-    console.log('🔄 Syncing watchlist after login...');
+    console.log('Login completed, isLoggedIn set to true');
+
     try {
       const watchlist = await syncWatchlistFromServer();
-      console.log('✅ Watchlist synced:', watchlist.length, 'items');
-      if (watchlist.length > 0) {
-      }
+      console.log('Watchlist synced:', watchlist.length, 'items');
     } catch (error) {
-      console.error('❌ Failed to sync watchlist:', error);
+      console.error('Failed to sync watchlist:', error);
     }
   }
 
@@ -3394,16 +3439,37 @@ export default function App() {
           onAuthRequest={() => setAuthGateModal("login")}
         />
       )}
+
       {page === "movie" && selectedMovie && (
-        <MovieDetailPage movie={selectedMovie} setPage={navigate} navigateBack={navigateBack} ratedTitles={ratedTitles} onRate={handleRate} setGlobalSearch={setGlobalSearch} isLoggedIn={isLoggedIn} onAuthRequest={() => setAuthGateModal("login")} />
+        <MovieDetailPage 
+          movie={selectedMovie} 
+          setPage={navigate} 
+          navigateBack={navigateBack} 
+          ratedTitles={ratedTitles} 
+          onRate={handleRate} 
+          setGlobalSearch={setGlobalSearch} 
+          isLoggedIn={isLoggedIn} 
+          onAuthRequest={() => setAuthGateModal("login")}
+          onOpenReviewModal={handleOpenReviewModal}
+          userReviews={userReviews}
+        />
       )}
       {page === "tv" && selectedMovie && (
-        <TVDetailPage movie={selectedMovie} setPage={navigate} navigateBack={navigateBack} ratedTitles={ratedTitles} onRate={handleRate} setGlobalSearch={setGlobalSearch} isLoggedIn={isLoggedIn} onAuthRequest={() => setAuthGateModal("login")} />
+        <TVDetailPage 
+          movie={selectedMovie} 
+          setPage={navigate} 
+          navigateBack={navigateBack} 
+          ratedTitles={ratedTitles} 
+          onRate={handleRate} 
+          setGlobalSearch={setGlobalSearch} 
+          isLoggedIn={isLoggedIn} 
+          onAuthRequest={() => setAuthGateModal("login")}
+          onOpenReviewModal={handleOpenReviewModal}
+          userReviews={userReviews}
+        />
       )}
-      {page === "browse" && (
-        <BrowsePage setPage={navigate} globalSearch={globalSearch} setGlobalSearch={setGlobalSearch} />
-      )}
-      {page === "profile" && isLoggedIn && (
+
+      {page === "profile" && (
         <ProfilePage
           setPage={navigate}
           ratedTitles={ratedTitles}
@@ -3412,6 +3478,22 @@ export default function App() {
           user={currentUser}
         />
       )}
+
+      <ReviewModal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        titleId={currentReviewTitle?.id || 0}
+        titleName={currentReviewTitle?.title || ""}
+        titleImg={currentReviewTitle?.img}
+        titleType={currentReviewTitle?.type === "TV" ? "TV" : "Movie"}
+        existingReview={userReviews.find(r => r.id === currentReviewTitle?.id) ? {
+          rating: userReviews.find(r => r.id === currentReviewTitle?.id)?.score || 0,
+          reviewText: userReviews.find(r => r.id === currentReviewTitle?.id)?.review || ""
+        } : null}
+        onSubmit={handleSubmitReview}
+        isLoggedIn={isLoggedIn}
+        onAuthRequest={() => setAuthGateModal("login")}
+      />
     </div>
   );
 }
