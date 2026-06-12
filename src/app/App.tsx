@@ -75,28 +75,6 @@ import type {
   SearchParams
 } from "../services/api";
 
-const LOCAL_POSTER_MAP: Record<string, string> = {
-  'Breaking Bad': '/src/images/movie_tv/Breaking_Bad.jpg',
-  'Dark': '/src/images/movie_tv/Dark.jpg',
-  'Forrest Gump': '/src/images/movie_tv/Forrest_Gump.jpg',
-  'Game of Thrones': '/src/images/movie_tv/Game_of_Thrones.jpg',
-  'Gladiator': '/src/images/movie_tv/Gladiator.jpg',
-  'House of the Dragon': '/src/images/movie_tv/House_of_the_Dragon.jpg',
-  'Inception': '/src/images/movie_tv/Inception.jpg',
-  'Oppenheimer': '/src/images/movie_tv/Oppenheimer.jpg',
-  'Parasite': '/src/images/movie_tv/Parasite.jpg',
-  'Pulp Fiction': '/src/images/movie_tv/Pulp_Fiction.jpg',
-  'Stranger Things': '/src/images/movie_tv/Stranger_Things.jpg',
-  'Succession': '/src/images/movie_tv/Succession.jpg',
-  'The Crown': '/src/images/movie_tv/The_Crown.jpg',
-  'The Dark Knight': '/src/images/movie_tv/The_Dark_Knight.jpg',
-  'The Last of Us': '/src/images/movie_tv/The_Last_of_Us.jpg',
-  'The Mandalorian': '/src/images/movie_tv/The_Mandalorian.jpg',
-  'The Matrix': '/src/images/movie_tv/The_Matrix.jpg',
-  'The Social Network': '/src/images/movie_tv/The_Social_Network.jpg',
-  'Titanic': '/src/images/movie_tv/Titanic.jpg',
-  'Westworld': '/src/images/movie_tv/Westworld.jpg',
-};
 
 function getPosterUrl(posterUrl: string | null, nameEn: string): string {
   if (LOCAL_POSTER_MAP[nameEn]) {
@@ -126,6 +104,202 @@ function convertHeroToMovieData(hero: HeroTitle): MovieData {
     awards: [],
     reviews: [],
   };
+}
+
+const LOCAL_POSTER_MAP: Record<string, string> = {
+  
+  // ============ Movie and TV series photos ============
+  'Breaking Bad': '/src/images/movie_tv/Breaking_Bad.jpg',
+  'Dark': '/src/images/movie_tv/Dark.jpg',
+  'Forrest Gump': '/src/images/movie_tv/Forrest_Gump.jpg',
+  'Game of Thrones': '/src/images/movie_tv/Game_of_Thrones.jpg',
+  'Gladiator': '/src/images/movie_tv/Gladiator.jpg',
+  'House of the Dragon': '/src/images/movie_tv/House_of_the_Dragon.jpg',
+  'Inception': '/src/images/movie_tv/Inception.jpg',
+  'Oppenheimer': '/src/images/movie_tv/Oppenheimer.jpg',
+  'Parasite': '/src/images/movie_tv/Parasite.jpg',
+  'Pulp Fiction': '/src/images/movie_tv/Pulp_Fiction.jpg',
+  'Stranger Things': '/src/images/movie_tv/Stranger_Things.jpg',
+  'Succession': '/src/images/movie_tv/Succession.jpg',
+  'The Crown': '/src/images/movie_tv/The_Crown.jpg',
+  'The Dark Knight': '/src/images/movie_tv/The_Dark_Knight.jpg',
+  'The Last of Us': '/src/images/movie_tv/The_Last_of_Us.jpg',
+  'The Mandalorian': '/src/images/movie_tv/The_Mandalorian.jpg',
+  'The Matrix': '/src/images/movie_tv/The_Matrix.jpg',
+  'The Social Network': '/src/images/movie_tv/The_Social_Network.jpg',
+  'Titanic': '/src/images/movie_tv/Titanic.jpg',
+  'Westworld': '/src/images/movie_tv/Westworld.jpg',
+
+  // ============ Actors' photos ============
+  'آرون اکهارت': '/src/images/actor/Aaron Eckhart.jpg',
+  'آرون پال': '/src/images/actor/Aaron Paul.jpg',
+  'آیدان گیلن': '/src/images/actor/Aidan Gillen.jpg',
+  'الن راک': '/src/images/actor/Alan Ruck.jpg',
+  'بونگ جون-هو': '/src/images/actor/Bong_Joon_Ho.jpg',
+  'بن فراست': '/src/images/actor/Ben_Frost.jpg',
+  'باران بو اودار': '/src/images/actor/Baran_bo_Odar.jpg',
+  'باب ادنکیرک':'/src/images/actor/Bob Odenkirk.jpg',
+  'آلان سیلوستری': '/src/images/actor/Alan Silvestri.jpg',
+  'اندرو گارفیلد': '/src/images/actor/Andrew Garfield.jpg',
+  'آنتونی هاپکینز': '/src/images/actor/Anthony Hopkins.jpg',
+  'آرمی همر': '/src/images/actor/Armie Hammer.jpg',
+  'آتیکوس راس': '/src/images/actor/Atticus Ross.jpg',
+  'بیلی زین': '/src/images/actor/Billy Zane.jpg',
+  'برندا سونگ': '/src/images/actor/Brenda Song.jpg',
+  'برت گلمن': '/src/images/actor/Brett Gelman.jpg',
+  'برایان کاکس': '/src/images/actor/Brian Cox.jpg',
+  'بروس ویلیس': '/src/images/actor/Bruce_Willis.jpg',
+  'برایان کرانستون': '/src/images/actor/Bryan Cranston.jpg',
+  'کارل وترز': '/src/images/actor/Carl Weathers.jpg',
+  'کریستین بیل': '/src/images/actor/Christian Bale.jpg',
+  'کونل هیل': '/src/images/actor/hill.jpg',
+  'کریستوفر نولان': '/src/images/actor/Christopher Nolan.jpg',
+  'کیلیان مورفی': '/src/images/actor/Cillian_Murphy.jpg',
+  'کلر فوی': '/src/images/actor/Claire Foy.jpg',
+  'کانی نیلسن': '/src/images/actor/Connie Nielsen.jpg',
+  'دی. بی. وایس': '/src/images/actor/D. B. Weiss.jpg',
+  'ریدلی اسکات': '/src/images/actor/Ridley Scott.jpg',
+  'سونگ کانگ هو': '/src/images/actor/Song Kang-ho.jpg',
+  'لی سون کیون': '/src/images/actor/Lee Sun-kyun.jpg',
+  'چو یو جئونگ': '/src/images/actor/Cho Yeo-jeong.jpg',
+  'چوی وو شیک': '/src/images/actor/Choi Woo-shik.jpg',
+  'پارک سو دام': '/src/images/actor/Park So-dam.jpg',
+  'لی جونگ اون': '/src/images/actor/Lee Jung-eun.jpg',
+  'دیو فیلونی': '/src/images/actor/Dave Filoni.jpg',
+  'دیو پورتر': '/src/images/actor/Dave Porter.jpg',
+  'دیوید بنیاف': '/src/images/actor/David Benioff.jpg',
+  'دیوید فینچر': '/src/images/actor/David Fincher.jpg',
+  'دیوید هاربر': '/src/images/actor/David Harbour.jpg',
+  'دافر برادران': '/src/images/actor/Duffer Brothers.jpg',
+  'اد هریس': '/src/images/actor/Ed Harris.jpg',
+  'لیزا جوی': '/src/images/actor/Lisa Joy.jpg',
+  'الیزابت دبیکی': '/src/images/actor/Elizabeth Debicki.jpg',
+  'الن پیج': '/src/images/actor/Elliot_Page.jpg',
+  'امیلیا کلارک': '/src/images/actor/Emilia Clarke.jpg',
+  'ایملدا استانتون': '/src/images/actor/Imelda_Staunton.jpg',
+  'امیلی بلانت': '/src/images/actor/Emily_Blunt.jpg',
+  'اما کورن': '/src/images/actor/Emma Corrin.jpg',
+  'اما دارسی': '/src/images/actor/Emma DArcy.jpg',
+  'اریک استولتز': '/src/images/actor/Eric Stoltz.jpg',
+  'ایو بست': '/src/images/actor/Eve Best.jpg',
+  'ایزاک همپستد رایت': '/src/images/actor/Isaac Hempstead Wright.jpg',
+  'فابین فرانکل': '/src/images/actor/Fabien Frankel.jpg',
+  'فلورنس پیو': '/src/images/actor/Florence_Pugh.jpg',
+  'فرانسیس فیشر': '/src/images/actor/Frances Fisher.jpg',
+  'گری اولدمن': '/src/images/actor/Gary_Oldman.jpg',
+  'جیانکارلو اسپوزیتو': '/src/images/actor/Giancarlo Esposito.jpg',
+  'جینا کارانو': '/src/images/actor/Gina Carano.jpg',
+  'گلوریا فاستر': '/src/images/actor/Gloria Foster.jpg',
+  'گلوریا استوارت': '/src/images/actor/Gloria Stuart.jpg',
+  'هانس زیمر': '/src/images/actor/Hans Zimmer.jpg',
+  'هاروی کایتل': '/src/images/actor/Harvey Keitel.jpg',
+  'هیت لجر': '/src/images/actor/Heath Ledger.jpg',
+  'هیام عباس': '/src/images/actor/Hiam Abbass.jpg',
+  'مگی جیلنهال': '/src/images/actor/Maggie Gyllenhaal.jpg',
+  'هیوگو ویوینگ': '/src/images/actor/Hugo Weaving.jpg',
+  'ایندیرا وارما': '/src/images/actor/Indira_Varma.jpg',
+  'جیمز هورنر': '/src/images/actor/James Horner.jpg',
+  'جیمز مارسدن': '/src/images/actor/James Marsden.jpg',
+  'جفری رایت': '/src/images/actor/Jeffrey Wright.jpg',
+  'جروم فلین': '/src/images/actor/Jerome_Flynn.jpg',
+  'جسی آیزنبرگ': '/src/images/actor/Jesse Eisenberg.jpg',
+  'جسی پلمونس': '/src/images/actor/Jesse Plemons.jpg',
+  'واکین فینیکس': '/src/images/actor/Joaquin Phoenix.jpg',
+  'جو کیری': '/src/images/actor/Joe Keery.jpg',
+  'جو پانتولیانو': '/src/images/actor/Joe Pantoliano.jpg',
+  'جان لیسگو': '/src/images/actor/John Lithgow.jpg',
+  'لزلی منویل': '/src/images/actor/Lesley Manville.jpg',
+  'جان تراولتا': '/src/images/actor/John_Travolta.jpg',
+  'جان فاورو': '/src/images/actor/Jon Favreau.jpg',
+  'جاناتان بنکس': '/src/images/actor/Jonathan Banks.jpg',
+  'جاناتان نولان': '/src/images/actor/Jonathan Nolan.jpg',
+  'جاناتان پریس': '/src/images/actor/Jonathan Pryce.jpg',
+  'جوردیس تریبل': '/src/images/actor/Jordis Triebel.jpg',
+  'جوزف گوردون لویت': '/src/images/actor/Joseph_Gordon_Levitt.jpg',
+  'جاش اوکانر': '/src/images/actor/Josh OConnor.jpg',
+  'جونگ جائه ایل': '/src/images/actor/Jung_Jae_Il.jpg',
+  'جاستین تیمبرلیک': '/src/images/actor/Justin Timberlake.jpg',
+  'جاستین لوپه': '/src/images/actor/Justine Lupe.jpg',
+  'کارولینه ئیشهورن': '/src/images/actor/Karoline Eichhorn.jpg',
+  'کیتی سکهوف': '/src/images/actor/Katee_Sackhoff.jpg',
+  'کتی بیتس': '/src/images/actor/Kathy Bates.jpg',
+  'کیانو ریوز': '/src/images/actor/Keanu Reeves.jpg',
+  'کن واتانابه': '/src/images/actor/Ken_Watanabe.jpg',
+  'کیت هرینگتون': '/src/images/actor/Kit Harington.jpg',
+  'کریستین نایرن': '/src/images/actor/Kristian_Nairn.jpg',
+  'کایل دیکسون': '/src/images/actor/Kyle Dixon.jpg',
+  'لورا فریزر': '/src/images/actor/Laura Fraser.jpg',
+  'لنا هیدی': '/src/images/actor/Lena Headey.jpg',
+  'لئوناردو دیکاپریو': '/src/images/actor/Leonardo DiCaprio.jpg',
+  'ماریون کوتیار': '/src/images/actor/Marion_Cotillard.jpg',
+  'مارک واشکه': '/src/images/actor/Mark Waschke.jpg',
+  'آنتونیو ولمانز': '/src/images/actor/Anthony Davidson.jpg',
+  'مارتین فیرر': '/src/images/actor/Martyn.jpg',
+  'مت دیمون': '/src/images/actor/Matt Damon.jpg',
+  'یانچه فریزه':'/src/images/actor/Ashley Stubbs.jpg',
+  'متیو مکافدین': '/src/images/actor/Matthew Macfadyen.jpg',
+  'متیو نیدهام': '/src/images/actor/Matthew Needham.jpg',
+  'مایا هاک': '/src/images/actor/Maya Hawke.jpg',
+  'مایکل کین': '/src/images/actor/Michael Caine.jpg',
+  'مایکل استاین': '/src/images/actor/Michael Stein.jpg',
+  'میگل ساپوچنیک': '/src/images/actor/Miguel Sapochnik.jpg',
+  'میلی بابی براون': '/src/images/actor/Millie Bobby Brown.jpg',
+  'مورگان فریمن': '/src/images/actor/Morgan_Freeman.jpg',
+  'مورای بارتلت': '/src/images/actor/Murray Bartlett.jpg',
+  'مایکلتی ویلیامسون': '/src/images/actor/Mykelti Williamson.jpg',
+  'ناتالی امانوئل': '/src/images/actor/Nathalie Emmanuel.jpg',
+  'نیکلاس براون': '/src/images/actor/Nicholas Braun.jpg',
+  'نیکو پارکر': '/src/images/actor/Nico Parker.jpg',
+  'نیکولای کاستر والدو': '/src/images/actor/Nikolaj Coster-Waldau.jpg',
+  'اولیور ماسوچی': '/src/images/actor/Oliver Masucci.jpg',
+  'الیور رید': '/src/images/actor/Oliver Reed.jpg',
+  'الیویا کولمن': '/src/images/actor/Olivia Colman.jpg',
+  'اولیویا کوک': '/src/images/actor/Olivia Cooke.jpg',
+  'پیتر دینکلیج': '/src/images/actor/Peter Dinklage.jpg',
+  'پیتر فریدمن': '/src/images/actor/Peter Friedman.jpg',
+  'پیتر مورگان': '/src/images/actor/Peter Morgan.jpg',
+  'پریا فرگوسن': '/src/images/actor/Priah Ferguson.jpg',
+  'کوئنتین تارانتینو': '/src/images/actor/Quentin Tarantino.jpg',
+  'ریس ایفانز': '/src/images/actor/Rhys Ifans.jpg',
+  'آر. جی. میته': '/src/images/actor/RJ Mitte.jpg',
+  'باب ادنکریک': '/src/images/actor/Robert John Odenkirk.jpg',
+  'رابرت زمکیس': '/src/images/actor/Robert Zemeckis.jpg',
+  'رابرت داونی جونیور': '/src/images/actor/Robert_Downey_Jr..jpg',
+  'رونی مارا': '/src/images/actor/Rooney Mara.jpg',
+  'روزانا آرکوت': '/src/images/actor/Rosanna Arquette.jpg',
+  'راسل کرو': '/src/images/actor/Russell Crowe.jpg',
+  'سیدی سینک': '/src/images/actor/Sadie Sink.jpg',
+  'سالی فیلد': '/src/images/actor/Sally Field.jpg',
+  'ساموئل ال. جکسون': '/src/images/actor/Samuel L._Jackson.jpg',
+  'شان بین': '/src/images/actor/Sean Bean.jpg',
+  'شان لوی': '/src/images/actor/Shawn Levy.jpg',
+  'لویی هوفمان': '/src/images/actor/Louis Hofmann.jpg',
+  'سیدس بابنت نادسن': '/src/images/actor/Sidse Babett Knudsen.jpg',
+  'سوفی ترنر': '/src/images/actor/Sophie Turner.jpg',
+  'استیون دالدری': '/src/images/actor/Stephen Daldry.jpg',
+  'استیو توسن': '/src/images/actor/Steve Toussaint.jpg',
+  'تام هنکس': '/src/images/actor/Tom Hanks.jpg',
+  'تام هاردی': '/src/images/actor/Tom_Hardy.jpg',
+  'ترنت رزنر': '/src/images/actor/Trent Reznor.jpg',
+  'میسی ویلیامز': '/src/images/actor/Maisie Williams.jpg',
+  'اوما تورمن': '/src/images/actor/Uma_Thurman.jpg',
+  'ویکتور گاربر': '/src/images/actor/Victor Garber.jpg',
+  'وینس گیلیگان': '/src/images/actor/Vince Gilligan.jpg',
+  'برادران واچوفسکی': '/src/images/actor/Wachowski.jpg',
+  'ورنر هرتسوک': '/src/images/actor/Werner Herzog.jpg',
+  'میشل کلر': '/src/images/actor/Wesley Clair Mitchell.jpg',
+  'وینونا رایدر': '/src/images/actor/Winona Ryder.jpg',
+};
+
+function getActorPhotoUrl(photoUrl: string | null, nameFa: string, nameEn?: string): string {
+  if (nameFa && LOCAL_POSTER_MAP[nameFa]) {
+    return LOCAL_POSTER_MAP[nameFa];
+  }
+  
+  if (nameEn && LOCAL_POSTER_MAP[nameEn]) {
+    return LOCAL_POSTER_MAP[nameEn];
+  }
+  return photoUrl || '/placeholder-actor.jpg';
 }
 
 function convertTopMovieToMovieData(movie: TopMovie): MovieData {
@@ -721,7 +895,6 @@ function HomePage({
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // ریکامندیشن‌ها را جداگانه fetch کن
   useEffect(() => {
     async function fetchRecommendations() {
       if (!isLoggedIn) {
@@ -749,7 +922,7 @@ function HomePage({
     }
     
     fetchRecommendations();
-  }, [isLoggedIn]); // فقط وقتی isLoggedIn تغییر کند اجرا می‌شود
+  }, [isLoggedIn]);
 
   useEffect(() => {
     async function fetchHomepageData() {
@@ -943,18 +1116,18 @@ function HomePage({
     <div>
       {!isFiltering && heroSlides.length > 0 && (
         <section
-          className="relative h-[700px] overflow-hidden bg-background"
+          className="relative h-[750px] overflow-hidden bg-black"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          <div className="absolute inset-0">
-            {heroSlides.map((slide, i) => (
-              <div
-                key={slide.id}
-                className={`absolute inset-0 transition-opacity duration-1000 ${
-                  i === heroIndex ? "opacity-100 z-10" : "opacity-0 z-0"
-                }`}
-              >
+          {heroSlides.map((slide, i) => (
+            <div
+              key={slide.id}
+              className={`absolute inset-0 transition-all duration-1000 ease-out ${
+                i === heroIndex ? "opacity-100 z-10 scale-100" : "opacity-0 z-0 scale-105"
+              }`}
+            >
+              <div className="absolute inset-0">
                 <img
                   src={slide.img.replace("w=400&h=600", "w=1440&h=700")}
                   alt=""
@@ -966,18 +1139,52 @@ function HomePage({
                   alt={slide.title}
                   className="absolute inset-0 w-full h-full object-cover object-top"
                 />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/98 via-black/85 to-black/60" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
+
+                <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(255,255,255,0.02)_2px,rgba(255,255,255,0.02)_4px)]" />
+
+                <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-primary/10 via-transparent to-transparent" />
+                <div className="absolute bottom-0 left-0 w-1/2 h-1/3 bg-gradient-to-t from-accent/5 to-transparent" />
               </div>
-            ))}
-          </div>
+
+              <div className="absolute inset-y-0 left-0 flex items-center z-20">
+                <div className="relative group ml-8 md:ml-12 lg:ml-16 xl:ml-20">
+                  <div className="absolute -inset-4 bg-gradient-to-r from-primary/30 via-transparent to-transparent blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                  <div className="absolute -inset-1 bg-gradient-to-r from-yellow-500/30 via-yellow-600/20 to-transparent rounded-2xl blur-sm" />
+                  
+                  <div className="relative">
+                    <img
+                      src={slide.img}
+                      alt={slide.title}
+                      className="w-[360px] md:w-[380px] lg:w-[400px] rounded-2xl shadow-2xl shadow-black/50 transition-all duration-500 group-hover:scale-105"
+                      style={{ 
+                        boxShadow: '30px 0 60px -20px rgba(0,0,0,0.9), 0 20px 40px -15px rgba(0,0,0,0.5)'
+                      }}
+                    />
+
+                    <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5 border border-yellow-500/30">
+                      <Star size={12} fill="#FCD34D" className="text-yellow-400" />
+                      <span className="text-yellow-400 font-bold text-sm">{toPersianDigits(slide.rating.toFixed(1))}</span>
+                      <span className="text-white/40 text-xs">/10</span>
+                    </div>
+                    
+                    <div className="absolute inset-0 rounded-2xl ring-1 ring-white/10 group-hover:ring-primary/40 transition-all duration-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
 
           <div className="absolute inset-0 z-20 pointer-events-none">
-            <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-black/20" />
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/50" />
+            <div className="absolute inset-0 bg-gradient-to-l from-black/95 via-black/75 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/50" />
           </div>
 
           {hero && (
-            <div className="relative z-30 h-full max-w-[1440px] mx-auto px-8 flex items-center pb-24">
-              <div className="max-w-2xl space-y-5">
+            <div className="relative z-30 h-full flex items-center pb-24">
+              <div className="w-full max-w-2xl absolute right-16 md:right-6 lg:right-40 top-1/2 -translate-y-1/2">
+                
                 <div>
                   <span className={`inline-block px-4 py-1.5 text-white text-sm font-bold rounded-lg uppercase tracking-wide ${
                     hero.type === "TV"
@@ -989,17 +1196,17 @@ function HomePage({
                 </div>
 
                 <h1
-                  className="text-[46px] font-black text-white leading-tight tracking-tight"
+                  className="text-[46px] font-black text-white leading-tight tracking-tight mt-5"
                   style={{ fontFamily: "'Vazirmatn', sans-serif", textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
                 >
                   {hero.title}
                 </h1>
 
-                <p className="text-white/55 text-lg font-light tracking-wide">
+                <p className="text-white/55 text-lg font-light tracking-wide mt-3">
                   {hero.originalTitle}
                 </p>
 
-                <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-4 flex-wrap mt-5">
                   <div className="flex items-center gap-1.5">
                     <Star size={16} fill="#FCD34D" className="text-amber-400" />
                     <span className="text-amber-300 font-bold">{toPersianDigits(hero.rating.toFixed(1))}</span>
@@ -1018,7 +1225,7 @@ function HomePage({
                   <span className="px-2 py-0.5 border border-white/30 text-white/60 text-xs rounded">{hero.age}</span>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mt-5">
                   {hero.genres.slice(0, 4).map((g) => (
                     <span key={g} className="px-4 py-1.5 bg-white/10 rounded-xl text-sm">
                       {g}
@@ -1026,17 +1233,18 @@ function HomePage({
                   ))}
                 </div>
 
-                <p className="text-white/80 text-base leading-relaxed max-w-xl line-clamp-3">
+                <p className="text-white/80 text-base leading-relaxed max-w-xl line-clamp-3 mt-5">
                   {hero.summary}
                 </p>
 
-                <div className="flex gap-4 pt-2">
+                <div className="flex gap-4 mt-6">
                   <button
                     onClick={() => setPage(hero.type === "TV" ? "tv" : "movie", hero)}
                     className="px-8 py-3.5 bg-gradient-to-r from-primary to-accent text-white rounded-xl font-bold hover:opacity-90 active:scale-95 transition-all shadow-xl shadow-primary/30"
                   >
                     {t.detail.viewDetails}
                   </button>
+                  
                   {(() => {
                     const status = heroSavedStatus[hero.id];
                     const isSaved = status?.saved || false;
@@ -1277,7 +1485,6 @@ function HomePage({
               </section>
             )}
 
-            {/* اگر کاربر لاگین است ولی ریکامندیشنی وجود ندارد */}
             {isLoggedIn && recommendations.length === 0 && !isLoading && (
               <section>
                 <SectionHeader title={t.home.recommendedForYou} />
@@ -1604,8 +1811,7 @@ function MovieDetailPage({
             </span>
           </div>
           <p className="text-white/60 text-sm leading-relaxed mb-8 max-w-2xl">{details?.summary || movie.summary}</p>
-          
-          {/* دکمه‌های Save و نقد */}
+
           <div className="flex gap-3 flex-wrap items-center">
             <SaveButton 
               saved={saved}
@@ -1646,7 +1852,6 @@ function MovieDetailPage({
             </button>
           </div>
           
-          {/* نمایش امتیاز قبلی اگر وجود داشته باشد */}
           {existingRating && !myReview && (
             <div className="mt-3 flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5 w-fit">
               <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
@@ -1673,7 +1878,7 @@ function MovieDetailPage({
                 <div key={a.person_id} onClick={() => goToBrowseWithQuery(a.name_fa)} className="flex-shrink-0 w-[120px] text-center group cursor-pointer">
                   <div className="relative overflow-hidden rounded-xl mb-3 w-[120px] h-[120px] border border-white/10 bg-white/5">
                     <img
-                      src={a.photo_url || '/placeholder.jpg'}
+                      src={getActorPhotoUrl(a.photo_url, a.name_fa, a.name_en)}
                       alt={a.name_fa}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
@@ -1791,7 +1996,6 @@ function MovieDetailPage({
         )}
       </div>
 
-      {/* Watchlist Selection Modal */}
       <WatchlistModal
         isOpen={showWatchlistModal}
         onClose={() => setShowWatchlistModal(false)}
@@ -2046,7 +2250,6 @@ function TVDetailPage({
             {details?.summary || tvShow.summary}
           </p>
           
-          {/* دکمه‌های Save و نقد */}
           <div className="flex gap-3 flex-wrap items-center">
             <SaveButton 
               saved={saved}
@@ -2073,8 +2276,7 @@ function TVDetailPage({
                 }
               }}
             />
-            
-            {/* دکمه نوشتن نقد */}
+
             <button
               onClick={() => onOpenReviewModal(tvShow)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
@@ -2087,8 +2289,7 @@ function TVDetailPage({
               {myReview ? "ویرایش نقد" : "نوشتن نقد"}
             </button>
           </div>
-          
-          {/* نمایش امتیاز قبلی اگر وجود داشته باشد */}
+
           {existingRating && !myReview && (
             <div className="mt-3 flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5 w-fit">
               <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
@@ -2115,7 +2316,7 @@ function TVDetailPage({
                 <div key={a.person_id} onClick={() => goToBrowseWithQuery(a.name_fa)} className="flex-shrink-0 w-[120px] text-center group cursor-pointer">
                   <div className="relative overflow-hidden rounded-xl mb-3 w-[120px] h-[120px] border border-white/10 bg-white/5">
                     <img
-                      src={a.photo_url || '/placeholder.jpg'}
+                      src={getActorPhotoUrl(a.photo_url, a.name_fa, a.name_en)}
                       alt={a.name_fa}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
@@ -2299,7 +2500,6 @@ function TVDetailPage({
         )}
       </div>
 
-      {/* Watchlist Selection Modal */}
       <WatchlistModal
         isOpen={showWatchlistModal}
         onClose={() => setShowWatchlistModal(false)}
@@ -2510,7 +2710,6 @@ function BrowsePage({
       </div>
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
-        {/* دکمه ژانر */}
         <div className="relative">
           <button
             onClick={() => setShowGenreDropdown(!showGenreDropdown)}
@@ -2540,7 +2739,6 @@ function BrowsePage({
           )}
         </div>
 
-        {/* دکمه سال */}
         <div className="relative">
           <button
             onClick={() => setShowYearDropdown(!showYearDropdown)}
@@ -2576,7 +2774,6 @@ function BrowsePage({
           )}
         </div>
 
-        {/* دکمه امتیاز */}
         <div className="relative">
           <button
             onClick={() => setShowRatingDropdown(!showRatingDropdown)}
@@ -2608,7 +2805,6 @@ function BrowsePage({
           )}
         </div>
 
-        {/* دکمه مرتب‌سازی */}
         <div className="relative">
           <button
             onClick={() => setShowSortDropdown(!showSortDropdown)}
@@ -2654,7 +2850,6 @@ function BrowsePage({
         )}
       </div>
 
-      {/* نمایش فیلترهای فعال */}
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2 mb-7 flex-wrap">
           <span className="text-white/30 dark:text-white/30 light:text-black/30 text-xs font-mono uppercase tracking-wider">فیلترهای فعال:</span>
@@ -3022,7 +3217,6 @@ function ProfilePage({
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-12">
-      {/* Profile Header - با طراحی جدید */}
       <div className="flex items-start gap-6 mb-12 pb-12 border-b border-white/8 dark:border-white/8 light:border-black/8">
         <div className="relative group">
           <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#E50914] to-[#5A0009] flex items-center justify-center text-white text-4xl font-bold flex-shrink-0 shadow-2xl overflow-hidden ring-4 ring-primary/20 transition-all duration-300 group-hover:ring-primary/40">
@@ -3063,7 +3257,6 @@ function ProfilePage({
         </button>
       </div>
 
-      {/* Stats Cards - با طراحی کارتی جدید */}
       <div className="grid grid-cols-5 gap-4 mb-14">
         {stats.map((s) => (
           <div key={s.label} className="group relative overflow-hidden bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-sm rounded-2xl p-5 border border-white/8 hover:border-white/20 transition-all duration-300 hover:-translate-y-1">
@@ -3076,7 +3269,6 @@ function ProfilePage({
         ))}
       </div>
 
-      {/* Watchlist Section - طراحی حرفه‌ای جدید */}
       <section className="mb-14">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -3085,8 +3277,7 @@ function ProfilePage({
               {t.profile.watchlist}
             </h2>
           </div>
-          
-          {/* دکمه تغییر وضعیت فیلتر */}
+
           <button
             onClick={() => setIsFilterBarOpen(!isFilterBarOpen)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 text-sm text-white/70"
@@ -3097,10 +3288,8 @@ function ProfilePage({
           </button>
         </div>
 
-        {/* نوار فیلتر پیشرفته - با انیمیشن */}
         <div className={`overflow-hidden transition-all duration-500 ease-out ${isFilterBarOpen ? "max-h-96 opacity-100 mb-8" : "max-h-0 opacity-0"}`}>
           <div className="bg-gradient-to-r from-white/5 to-white/0 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
-            {/* فیلتر وضعیت - دکمه‌های رنگی با آمار */}
             <div className="mb-6">
               <p className="text-white/40 text-xs font-mono uppercase tracking-wider mb-4 flex items-center gap-2">
                 <List size={12} /> وضعیت تماشا
@@ -3131,7 +3320,6 @@ function ProfilePage({
               </div>
             </div>
 
-            {/* فیلتر نوع و مرتب‌سازی در یک ردیف */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/10">
               <div className="flex items-center gap-4">
                 <p className="text-white/40 text-xs font-mono uppercase tracking-wider">نوع محتوا</p>
@@ -3176,7 +3364,6 @@ function ProfilePage({
               </div>
             </div>
 
-            {/* دکمه ریست فیلترها */}
             {(activeStatusFilter !== "all" || activeTypeFilter !== "all") && (
               <div className="mt-4 flex justify-end">
                 <button
@@ -3210,7 +3397,6 @@ function ProfilePage({
           </div>
         ) : (
           <>
-            {/* نمایش نتایج و وضعیت فعال */}
             <div className="flex items-center justify-between mb-6">
               <p className="text-white/40 text-sm flex items-center gap-2">
                 <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
@@ -3223,7 +3409,6 @@ function ProfilePage({
               </p>
             </div>
 
-            {/* گرید لیست تماشا */}
             {paginatedWatchlist.length === 0 ? (
               <div className="text-center py-16 bg-white/5 rounded-2xl border border-white/8">
                 <p className="text-white/40 text-sm">هیچ عنوانی با این فیلترها یافت نشد</p>
@@ -3256,7 +3441,6 @@ function ProfilePage({
               </div>
             )}
 
-            {/* صفحه‌بندی مدرن */}
             {totalWlPages > 1 && (
               <div className="flex items-center justify-center gap-2 mt-8">
                 <button 
@@ -3309,7 +3493,6 @@ function ProfilePage({
         )}
       </section>
 
-      {/* Ratings and Reviews Section - با طراحی بهبود یافته */}
       <section>
         <div className="flex items-center gap-3 mb-8">
           <div className="w-1 h-8 bg-primary rounded-full" />
@@ -3441,7 +3624,6 @@ function ProfilePage({
         )}
       </section>
 
-      {/* Edit Profile Modal */}
       {showEditProfile && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setShowEditProfile(false)}>
           <div className="bg-card border border-white/15 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -3451,7 +3633,6 @@ function ProfilePage({
             </div>
             
             <div className="space-y-5">
-              {/* Username */}
               <div>
                 <label className="block text-white/60 text-sm mb-2">نام کاربری</label>
                 <input 
@@ -3461,8 +3642,7 @@ function ProfilePage({
                   className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" 
                 />
               </div>
-              
-              {/* Email */}
+
               <div>
                 <label className="block text-white/60 text-sm mb-2">ایمیل</label>
                 <input 
@@ -3473,7 +3653,6 @@ function ProfilePage({
                 />
               </div>
               
-              {/* Photo URL */}
               <div>
                 <label className="block text-white/60 text-sm mb-2">آدرس عکس پروفایل</label>
                 <input 
@@ -3485,7 +3664,6 @@ function ProfilePage({
                 />
               </div>
               
-              {/* Current Password */}
               <div>
                 <label className="block text-white/60 text-sm mb-2">رمز عبور فعلی <span className="text-red-400 text-xs">(برای تغییر رمز الزامی است)</span></label>
                 <input 
@@ -3505,7 +3683,6 @@ function ProfilePage({
                 )}
               </div>
               
-              {/* New Password */}
               <div>
                 <label className="block text-white/60 text-sm mb-2">رمز عبور جدید (اختیاری)</label>
                 <input 
@@ -3517,7 +3694,6 @@ function ProfilePage({
                 />
               </div>
               
-              {/* Delete Account Section */}
               <div className="pt-4 border-t border-white/10">
                 <button 
                   onClick={() => setShowDeleteModal(true)} 
@@ -3528,7 +3704,6 @@ function ProfilePage({
                 <p className="text-white/30 text-xs text-center mt-2">برای حذف حساب، رمز عبور خود را وارد کنید</p>
               </div>
               
-              {/* Buttons */}
               {generalError && (
                 <p className="text-red-400 text-sm text-center py-2">{generalError}</p>
               )}
@@ -3543,17 +3718,14 @@ function ProfilePage({
                 <button 
                   onClick={async () => { 
                     try { 
-                      // Clear previous errors
                       setPasswordError("");
                       setGeneralError("");
-                      
-                      // Check if trying to change password without current password
+                    
                       if (editPassword.trim() && !currentPassword.trim()) {
                         setPasswordError("برای تغییر رمز عبور، رمز عبور فعلی الزامی است");
                         return;
                       }
-                      
-                      // Prepare update data with all fields
+
                       const updateData = {
                         current_password: currentPassword.trim() || null,
                         username: (editUsername.trim() && editUsername !== profileUsername) ? editUsername.trim() : null,
@@ -3562,29 +3734,23 @@ function ProfilePage({
                         new_password: editPassword.trim() || null
                       };
                       
-                      // Only proceed if there's at least one field to update
                       const hasChanges = Object.values(updateData).some(value => value !== null);
                       if (!hasChanges) {
                         setGeneralError("هیچ تغییری اعمال نشده است");
                         return;
                       }
-                      
-                      // Send to backend and get response with new token and user data
+
                       const response = await updateProfile(updateData);
-                      
-                      // Update token in localStorage
+
                       if (response.access_token) {
                         localStorage.setItem('access_token', response.access_token);
                       }
-                      
-                      // Update user data from backend response
+
                       setProfileUsername(response.username);
                       setProfileEmail(response.email);
-                      // Use default photo_url if backend doesn't return one
                       const defaultPhotoUrl = 'https://ui-avatars.com/api/?background=E50914&color=fff&size=96&name=' + encodeURIComponent(response.username);
                       setProfilePhotoUrl(defaultPhotoUrl);
                       
-                      // Update localStorage user_data
                       const updatedUserData = {
                         user_id: response.user_id,
                         username: response.username,
@@ -3592,8 +3758,7 @@ function ProfilePage({
                         photo_url: defaultPhotoUrl
                       };
                       localStorage.setItem('user_data', JSON.stringify(updatedUserData));
-                      
-                      // Close modal and reset form
+
                       setShowEditProfile(false); 
                       setEditPassword(""); 
                       setEditPhotoUrl("");
@@ -3634,7 +3799,6 @@ function ProfilePage({
         </div>
       )}
 
-      {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-8" onClick={() => {
           setShowDeleteModal(false);
@@ -3731,7 +3895,6 @@ function ProfilePage({
         </div>
       )}
 
-      {/* Edit Rating Modal - بدون تغییر */}
       {editingId !== null && (() => {
         const rating = userRatings.find(r => r.title_id === editingId);
         if (!rating) return null;
@@ -3766,7 +3929,6 @@ function ProfilePage({
         );
       })()}
 
-      {/* Delete Confirmation Modal - بدون تغییر */}
       {confirmDeleteId !== null && (() => {
         const rating = userRatings.find(r => r.title_id === confirmDeleteId);
         if (!rating) return null;

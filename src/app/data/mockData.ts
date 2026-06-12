@@ -51,6 +51,7 @@ const LOCAL_POSTER_MAP: Record<string, string> = {
   'Westworld': '/src/images/movie_tv/Westworld.jpg',
 };
 
+
 function getLocalPoster(originalTitle: string, defaultImg: string): string {
   if (LOCAL_POSTER_MAP[originalTitle]) {
     return LOCAL_POSTER_MAP[originalTitle];
