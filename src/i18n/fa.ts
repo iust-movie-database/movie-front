@@ -94,7 +94,7 @@ export const translations = {
 
   // Browse/Discover Page
   browse: {
-    title: 'کشف کنید',
+    browseTitle: 'کشف کنید',  // تغییر نام از title به browseTitle
     subtitle: 'هزاران فیلم و سریال را کشف کنید',
     searchPlaceholder: 'جستجوی فیلم، سریال، بازیگر، کارگردان...',
     filterBy: 'فیلتر بر اساس:',
@@ -115,7 +115,7 @@ export const translations = {
     cancel: 'لغو',
     popularity: 'محبوبیت',
     releaseDate: 'تاریخ انتشار',
-    title: 'عنوان',
+    sortTitle: 'عنوان',  // تغییر نام از title به sortTitle
     matching: 'مطابق با',
     allYears: 'همه سال‌ها',
     allRatings: 'همه امتیازها',
@@ -130,6 +130,10 @@ export const translations = {
     back: 'بازگشت',
     save: 'ذخیره',
     saved: 'ذخیره شد',
+    saveToWatchlist: 'افزودن به لیست تماشا',
+    wantToWatch: 'می‌خواهم تماشا کنم',
+    watching: 'در حال تماشا',
+    watched: 'تماشا شده',
     rate: 'امتیاز:',
     submit: 'ثبت',
     yourRating: 'امتیاز شما',
@@ -155,6 +159,9 @@ export const translations = {
     season: 'فصل',
     episodes: 'قسمت',
     episode: 'قسمت',
+    addToWatchlist: 'افزودن به لیست تماشا',
+    selectListType: 'انتخاب لیست',
+    selectListDescription: 'این عنوان را در کدام لیست قرار می‌دهید؟',
   },
 
   // Profile Page
@@ -198,6 +205,7 @@ export const translations = {
     wantToWatch: 'می‌خواهم تماشا کنم',
     watching: 'در حال تماشا',
     watched: 'تماشا شده',
+    unsave: 'حذف از لیست',
   },
 
   // Edit Profile Modal
@@ -231,7 +239,7 @@ export const translations = {
 
   // Delete Confirmation
   deleteConfirm: {
-    title: 'تأیید حذف',
+    deleteConfirmTitle: 'تأیید حذف',  // تغییر نام از title به deleteConfirmTitle
     deleteRating: 'حذف امتیاز',
     message: 'آیا مطمئن هستید که می‌خواهید این امتیاز را حذف کنید؟ این عمل قابل بازگشت نیست.',
     confirmDelete: 'بله، حذف شود',

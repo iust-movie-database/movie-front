@@ -1,8 +1,6 @@
-// src/services/api.ts
 import { getToken, setToken, removeToken } from '../utils/jwt.utils';
 const API_BASE_URL = 'http://localhost:8000';
 
-// تابع کمکی برای مدیریت پاسخ‌ها
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -11,7 +9,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
-// ============ JWT Auth Types & Functions (Matching your backend) ============
+// ============ JWT Auth Types & Functions ============
 
 export interface LoginCredentials {
   email: string;
@@ -24,16 +22,14 @@ export interface SignupCredentials {
   password: string;
 }
 
-// Login/Register response structure (matches your backend)
 export interface AuthResponse {
-  access_token: string;   // Changed from 'token' to 'access_token'
-  token_type: string;      // New field
-  user_id: number;         // Changed from object to direct fields
-  username: string;        // New field
-  email: string;           // New field
+  access_token: string;
+  token_type: string;
+  user_id: number;
+  username: string;
+  email: string;
 }
 
-// Login function - UPDATED for your backend
 export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
@@ -45,7 +41,6 @@ export async function login(credentials: LoginCredentials): Promise<AuthResponse
   
   const data = await handleResponse<AuthResponse>(response);
   
-  // Changed: data.access_token instead of data.token
   if (data.access_token) {
     setToken(data.access_token);
   }
@@ -53,7 +48,6 @@ export async function login(credentials: LoginCredentials): Promise<AuthResponse
   return data;
 }
 
-// NEW: Signup function for your backend
 export async function signup(credentials: SignupCredentials): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
@@ -72,23 +66,16 @@ export async function signup(credentials: SignupCredentials): Promise<AuthRespon
   return data;
 }
 
-// Logout function - REMOVED backend call (since you have no logout endpoint)
 export async function logout(): Promise<void> {
-  // Just remove token locally
   removeToken();
-  // Remove user data if you stored it
   localStorage.removeItem('user_data');
-  // Optional: redirect to login
+  localStorage.removeItem('user_watchlist');
   if (typeof window !== 'undefined') {
     window.location.href = '/login';
   }
 }
 
-// Get current user - TEMPORARILY DISABLED (since no /auth/me endpoint yet)
-// You'll need to save user data from login/signup response instead
 export async function getCurrentUser(): Promise<Omit<AuthResponse, 'access_token'>> {
-  // Since your backend doesn't have /auth/me endpoint yet,
-  // we'll get user data from localStorage instead
   const userDataStr = localStorage.getItem('user_data');
   if (!userDataStr) {
     throw new Error('No user data found');
@@ -96,7 +83,6 @@ export async function getCurrentUser(): Promise<Omit<AuthResponse, 'access_token
   return JSON.parse(userDataStr);
 }
 
-// Helper function to save user data after login/signup
 export const saveUserData = (response: AuthResponse): void => {
   const userData = {
     user_id: response.user_id,
@@ -106,13 +92,11 @@ export const saveUserData = (response: AuthResponse): void => {
   localStorage.setItem('user_data', JSON.stringify(userData));
 };
 
-// Helper: Get authentication headers
 function getAuthHeaders(): HeadersInit {
   const token = getToken();
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
-// Generic authenticated fetch function (unchanged)
 export async function authenticatedFetch<T>(
   url: string, 
   options: RequestInit = {}
@@ -129,6 +113,7 @@ export async function authenticatedFetch<T>(
   if (response.status === 401) {
     removeToken();
     localStorage.removeItem('user_data');
+    localStorage.removeItem('user_watchlist');
     if (typeof window !== 'undefined') {
       window.location.href = '/login';
     }
@@ -209,8 +194,6 @@ export interface Recommendation {
   end_year: number | null;
   is_saved: boolean;
 }
-
-// ============ Single Title Types ============
 
 export interface TitleDetails {
   title_id: number;
@@ -299,11 +282,20 @@ export interface Episode {
   episode_summary: string;
 }
 
-// ============ Watchlist Types ============
+export type WatchlistStatus = 'want_to_watch' | 'watching' | 'watched';
+
+function toBackendStatus(status: WatchlistStatus): string {
+  switch (status) {
+    case 'want_to_watch': return 'Want to Watch';
+    case 'watching': return 'Watching';
+    case 'watched': return 'Watched';
+    default: return 'Want to Watch';
+  }
+}
 
 export interface WatchlistItem {
   title_id: number;
-  t_type: string;        // "M" = Movie, "S" = Series
+  t_type: string;
   age_rating: string;
   name_fa: string;
   name_en: string;
@@ -313,12 +305,14 @@ export interface WatchlistItem {
   duration_mins: number | null;
   total_seasons: number | null;
   total_episodes: number | null;
-  status: string;        // "want_to_watch", "watching", "watched"
+  status: WatchlistStatus;
 }
 
-// ============ Search Types ============
+export interface ApiResponse {
+  success: boolean;
+  message: string;
+}
 
-// در src/services/api.ts
 export interface SearchResult {
   title_id: number;
   t_type: string;
@@ -363,11 +357,9 @@ export interface UserRating {
   t_type: string;
 }
 
-// ============ Profile Types ============
-
 export interface UserProfile {
   username: string;
-  join_date: string;  // format: "2026-06-11"
+  join_date: string;
   photo_url: string | null;
   email: string;
   total_rated: number;
@@ -377,127 +369,322 @@ export interface UserProfile {
   total_watched: number;
 }
 
-// Update user profile
-export async function updateProfile(data: { 
-  username?: string; 
-  password?: string;
-  photo_url?: string;
-}) {
-  const token = localStorage.getItem('access_token');
-  const response = await fetch('/api/profile', {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
+// ============ Watchlist LocalStorage Functions ============
+
+const WATCHLIST_STORAGE_KEY = 'user_watchlist';
+
+export function saveWatchlistToLocalStorage(items: WatchlistItem[]): void {
+  localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(items));
+}
+
+export function getWatchlistFromLocalStorage(): WatchlistItem[] {
+  const data = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+  if (!data) return [];
+  try {
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+}
+
+export function updateWatchlistInLocalStorage(
+  titleId: number, 
+  status: WatchlistStatus | null, 
+  itemData?: Partial<WatchlistItem>
+): WatchlistItem[] {
+  const currentList = getWatchlistFromLocalStorage();
   
-  if (!response.ok) {
-    const errorData = await response.json(); // Try to get error details
-    console.error('Server response:', errorData);
-    throw new Error(errorData.message || errorData.error || 'Update failed');
+  if (status === null) {
+    const newList = currentList.filter(item => item.title_id !== titleId);
+    saveWatchlistToLocalStorage(newList);
+    return newList;
+  } else {
+    const existingIndex = currentList.findIndex(item => item.title_id === titleId);
+    
+    const newItem: WatchlistItem = {
+      title_id: titleId,
+      t_type: itemData?.t_type || 'M',
+      age_rating: itemData?.age_rating || '',
+      name_fa: itemData?.name_fa || '',
+      name_en: itemData?.name_en || '',
+      poster_url: itemData?.poster_url || null,
+      genres: itemData?.genres || '',
+      release_year: itemData?.release_year || 0,
+      duration_mins: itemData?.duration_mins || null,
+      total_seasons: itemData?.total_seasons || null,
+      total_episodes: itemData?.total_episodes || null,
+      status: status,
+    };
+    
+    if (existingIndex >= 0) {
+      currentList[existingIndex] = { ...currentList[existingIndex], ...newItem, status };
+      saveWatchlistToLocalStorage(currentList);
+      return currentList;
+    } else {
+      const newList = [...currentList, newItem];
+      saveWatchlistToLocalStorage(newList);
+      return newList;
+    }
+  }
+}
+
+// ============ Watchlist API Functions ============
+
+export async function addToWatchlist(titleId: number, status: WatchlistStatus = 'want_to_watch'): Promise<ApiResponse> {
+  updateWatchlistInLocalStorage(titleId, status);
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/saved/${titleId}`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: toBackendStatus(status) }),
+    });
+    
+    if (response.ok) {
+      return handleResponse<ApiResponse>(response);
+    }
+  } catch (error) {
+    console.error('Server error, but saved locally:', error);
   }
   
-  return response.json();
+  return { success: true, message: 'Saved locally' };
 }
 
-// Delete user account
-export async function deleteProfile(): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/profile/`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-  return handleResponse<{ status: string }>(response);
-}
-
-// ============ توابع API ============
-
-// Get user's ratings and reviews from backend
-export async function getUserRatings(): Promise<UserRating[]> {
-  const response = await fetch(`${API_BASE_URL}/user/rating`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse<UserRating[]>(response);
-}
-
-// Add or update a rating/review
-export async function addOrUpdateRating(titleId: number, data: {
-  score: number;
-  comment: string;
-  is_spoiler: boolean;
-}): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-  return handleResponse<{ status: string }>(response);
-}
-
-// Delete a rating/review
-export async function deleteRating(titleId: number): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-  return handleResponse<{ status: string }>(response);
-}
-
-// Add to watchlist
-export async function addToWatchlist(titleId: number): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/saved/${titleId}`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ status: "Want to Watch" }),
-  });
+export async function updateWatchlistStatus(titleId: number, status: WatchlistStatus): Promise<ApiResponse> {
+  updateWatchlistInLocalStorage(titleId, status);
   
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}/saved/${titleId}`, {
+      method: 'PUT',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: toBackendStatus(status) }),
+    });
+    
+    if (response.ok) {
+      return handleResponse<ApiResponse>(response);
+    }
+  } catch (error) {
+    console.error('Server error, but updated locally:', error);
   }
   
-  return response.json();
+  return { success: true, message: 'Updated locally' };
 }
 
-// Remove from watchlist
-export async function removeFromWatchlist(titleId: number): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/saved/${titleId}`, {
-    method: 'DELETE',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ status: "removed" }), // ← sending status
-  });
+export async function removeFromWatchlist(titleId: number): Promise<ApiResponse> {
+  updateWatchlistInLocalStorage(titleId, null);
   
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}/saved/${titleId}`, {
+      method: 'DELETE',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      return handleResponse<ApiResponse>(response);
+    }
+  } catch (error) {
+    console.error('Server error, but removed locally:', error);
   }
   
-  return response.json();
+  return { success: true, message: 'Removed locally' };
 }
 
-// Get user watchlist
-export async function getUserWatchlist(): Promise<WatchlistItem[]> {
-  const response = await fetch(`${API_BASE_URL}/user/watchlist`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse<WatchlistItem[]>(response);
+export async function getUserWatchlist(forceRefresh: boolean = false): Promise<WatchlistItem[]> {
+  if (forceRefresh) {
+    console.log('🔄 Force fetching watchlist from server...');
+    const token = getToken();
+    if (!token) {
+      console.log('No token, returning empty');
+      return [];
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/user/watchlist`, {
+        headers: getAuthHeaders(),
+      });
+      
+      if (response.ok) {
+        let data = await response.json();
+        // تبدیل status به فرمت frontend
+        data = data.map((item: WatchlistItem) => ({
+          ...item,
+          status: normalizeBackendStatus(item.status)
+        }));
+        console.log('✅ Watchlist fetched:', data.length, 'items');
+        saveWatchlistToLocalStorage(data);
+        return data;
+      } else {
+        console.log('❌ Watchlist fetch failed with status:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching watchlist:', error);
+    }
+  }
+  
+  const localData = getWatchlistFromLocalStorage();
+  if (localData && localData.length > 0) {
+    console.log('📦 Using cached watchlist:', localData.length, 'items');
+    return localData;
+  }
+  
+  if (!forceRefresh) {
+    return getUserWatchlist(true);
+  }
+  
+  return [];
 }
 
-// Get user profile
+function normalizeBackendStatus(status: string): WatchlistStatus {
+  if (!status) return 'want_to_watch';
+  const statusLower = status.toLowerCase();
+  if (statusLower === 'want to watch') return 'want_to_watch';
+  if (statusLower === 'watching') return 'watching';
+  if (statusLower === 'watched') return 'watched';
+  return 'want_to_watch';
+}
+
+export async function syncWatchlistFromServer(): Promise<WatchlistItem[]> {
+  console.log('🔄 Syncing watchlist from server...');
+  const token = getToken();
+  if (!token) {
+    console.log('No token found');
+    return [];
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/watchlist`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Watchlist synced:', data.length, 'items');
+      saveWatchlistToLocalStorage(data);
+      return data;
+    } else {
+      console.log('❌ Sync failed with status:', response.status);
+      return [];
+    }
+  } catch (error) {
+    console.error('❌ Sync error:', error);
+    return [];
+  }
+}
+
+// ============ Profile API Functions ============
+
 export async function getUserProfile(): Promise<UserProfile> {
   const response = await fetch(`${API_BASE_URL}/user/profile`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<UserProfile>(response);
 }
+
+export async function updateProfile(data: { 
+  username?: string; 
+  password?: string;
+  photo_url?: string;
+}) {
+  const response = await fetch(`${API_BASE_URL}/profile/`, {
+    method: 'PUT',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || errorData.detail || 'Update failed');
+  }
+  
+  return handleResponse<{ success: boolean; message: string }>(response);
+}
+
+export async function deleteProfile(password?: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE_URL}/profile/`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: password || '' }),
+  });
+  return handleResponse<{ success: boolean; message: string }>(response);
+}
+
+// ============ Ratings API Functions ============
+
+export async function getUserRatings(): Promise<UserRating[]> {
+  const endpoints = [
+    '/user/ratings',
+    '/ratings/user', 
+    '/my-ratings',
+    '/reviews/user',
+    '/user/rating'
+  ];
+  
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: getAuthHeaders(),
+      });
+      
+      if (response.ok) {
+        const data = await handleResponse<UserRating[]>(response);
+        if (data && Array.isArray(data)) {
+          console.log(`Ratings fetched from ${endpoint}:`, data.length);
+          return data;
+        }
+      }
+    } catch (e) {
+      console.log(`Endpoint ${endpoint} failed:`, e);
+      continue;
+    }
+  }
+  
+  console.warn('Could not fetch user ratings, returning empty array');
+  return [];
+}
+
+export async function addOrUpdateRating(titleId: number, data: {
+  score: number;
+  comment: string;
+  is_spoiler: boolean;
+}): Promise<ApiResponse> {
+  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ApiResponse>(response);
+}
+
+export async function deleteRating(titleId: number): Promise<ApiResponse> {
+  const response = await fetch(`${API_BASE_URL}/reviews/${titleId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<ApiResponse>(response);
+}
+
+// ============ Homepage APIs ============
 
 export async function getHero(limit: number = 5): Promise<HeroTitle[]> {
   const response = await fetch(`${API_BASE_URL}/homepage/hero?limit=${limit}`);
@@ -514,7 +701,6 @@ export async function getRecommendations(limit: number = 5, token?: string): Pro
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   } else {
-    // Auto-add token if available
     const autoToken = getToken();
     if (autoToken) {
       headers['Authorization'] = `Bearer ${autoToken}`;
@@ -538,12 +724,10 @@ export async function getComingSoon(limit: number = 5): Promise<any[]> {
   try {
     const response = await fetch(`${API_BASE_URL}/homepage/coming-soon?limit=${limit}`);
     if (response.status === 404) {
-      console.log('Coming soon endpoint not implemented yet');
       return [];
     }
     return handleResponse<any[]>(response);
   } catch (error) {
-    console.log('Error fetching coming soon:', error);
     return [];
   }
 }
@@ -592,8 +776,6 @@ export async function getEpisodes(title_id: number): Promise<Episode[]> {
 
 // ============ Search API ============
 
-// در تابع searchTitles
-// در تابع searchTitles
 export async function searchTitles(params: SearchParams = {}): Promise<SearchResult[]> {
   const queryParams = new URLSearchParams();
   
@@ -611,7 +793,6 @@ export async function searchTitles(params: SearchParams = {}): Promise<SearchRes
   if (params.offset) queryParams.append('offset', params.offset.toString());
   
   const url = `${API_BASE_URL}/search/titles?${queryParams.toString()}`;
-  console.log('Search URL:', url); // برای دیباگ
   const response = await fetch(url);
   return handleResponse<SearchResult[]>(response);
 }

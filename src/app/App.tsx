@@ -1,10 +1,9 @@
-// src/app/App.tsx
 import { useState, useRef, useEffect } from "react";
 import {
   Star, Bookmark, BookmarkCheck, Search, ChevronLeft, ChevronRight,
   ChevronDown, X, Edit2, Trash2, Calendar, Clock, Sun, Moon,
 } from "lucide-react";
-import { Award } from "lucide-react";
+import { Award, Filter, Mail, List } from "lucide-react";
 import { translations as t, toPersianDigits, formatPersianNumber, genreIcons } from "../i18n/fa";
 import { AuthFlow } from "./components/AuthFlow";
 import {
@@ -17,6 +16,7 @@ import {
   MovieCard,
   SectionHeader,
 } from "./components/shared";
+import { WatchlistModal } from "./components/WatchlistModal";
 import { MOVIES, TV_SERIES, COMING_SOON, SEED_RATINGS } from "./data/mockData";
 import type { Page, MovieData, RatedEntry } from "./types";
 import { 
@@ -32,8 +32,14 @@ import {
   deleteRating,
   updateProfile,
   deleteProfile,
+  updateWatchlistStatus,      
+  type WatchlistStatus,
+  getWatchlistFromLocalStorage,
+  saveWatchlistToLocalStorage,
+  updateWatchlistInLocalStorage,
+  syncWatchlistFromServer,
 } from '../services/api';
-// Import all API functions
+
 import { 
   getHero, 
   getPopularGenres, 
@@ -67,10 +73,9 @@ import type {
   Season,
   Episode,
   SearchResult,
-  SearchParams  // <-- این خط را اضافه کنید
+  SearchParams
 } from "../services/api";
 
-// تابع تبدیل HeroTitle به MovieData
 function convertHeroToMovieData(hero: HeroTitle): MovieData {
   return {
     id: hero.title_id,
@@ -182,6 +187,57 @@ function convertSearchResultToMovieData(item: SearchResult): MovieData {
     awards: [],
     reviews: [],
   };
+}
+
+async function syncWatchlistToServerAndLocal(
+  titleId: number, 
+  status: WatchlistStatus, 
+  movieData: MovieData,
+  savedBefore: boolean
+): Promise<boolean> {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) return false;
+    
+    let backendStatus = '';
+    if (status === 'want_to_watch') backendStatus = 'Want to Watch';
+    else if (status === 'watching') backendStatus = 'Watching';
+    else if (status === 'watched') backendStatus = 'Watched';
+    
+    const localItemData: Partial<WatchlistItem> = {
+      title_id: titleId,
+      name_fa: movieData.title,
+      name_en: movieData.originalTitle,
+      poster_url: movieData.img,
+      genres: movieData.genres.join(', '),
+      release_year: movieData.year,
+      t_type: movieData.type === 'TV' ? 'S' : 'M',
+      age_rating: movieData.age,
+      duration_mins: null,
+      total_seasons: movieData.type === 'TV' ? (parseInt(movieData.duration) || null) : null,
+      total_episodes: null,
+    };
+    
+    updateWatchlistInLocalStorage(titleId, status, localItemData);
+    
+    const response = await fetch(`http://localhost:8000/saved/${titleId}`, {
+      method: savedBefore ? 'PUT' : 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: backendStatus }),
+    });
+    
+    if (!response.ok) {
+      console.warn('Server sync failed, but data saved locally');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error syncing watchlist:', error);
+    return false;
+  }
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
@@ -529,9 +585,9 @@ function DesignSystemPage() {
             <div>
               <p className="text-white/25 text-[10px] uppercase tracking-[0.2em] font-mono mb-4">Save Button</p>
               <div className="flex gap-3">
-                <SaveButton saved={false} />
-                <SaveButton saved={true} />
-                <SaveButton saved={btnSaved} onToggle={() => setBtnSaved(!btnSaved)} />
+                <SaveButton saved={false} status={null} onToggle={()=>{}} onSelectStatus={()=>{}} onRemove={()=>{}} />
+                <SaveButton saved={true} status="watched" onToggle={()=>{}} onSelectStatus={()=>{}} onRemove={()=>{}} />
+                <SaveButton saved={btnSaved} status={btnSaved ? "watched" : null} onToggle={()=>setBtnSaved(!btnSaved)} onSelectStatus={()=>{}} onRemove={()=>{}} />
               </div>
             </div>
             <div>
@@ -1039,7 +1095,7 @@ function HomePage({
   );
 }
 
-// ── Page 3: Movie Detail (با اتصال به API) ─────────────────────────────────────
+// ── Page 3: Movie Detail (با اتصال به API و پشتیبانی از localStorage) ─────────────────
 
 function MovieDetailPage({
   movie,
@@ -1061,6 +1117,8 @@ function MovieDetailPage({
   onAuthRequest: () => void;
 }) {
   const [saved, setSaved] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState<WatchlistStatus | null>(null);
+  const [showWatchlistModal, setShowWatchlistModal] = useState(false);
   const [pendingScore, setPendingScore] = useState(0);
   const [details, setDetails] = useState<TitleDetails | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
@@ -1070,6 +1128,49 @@ function MovieDetailPage({
   const [similarTitles, setSimilarTitles] = useState<SimilarTitle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const existingRating = ratedTitles.find((r) => r.id === movie.id);
+
+  // Check watchlist status on load - با همگام‌سازی از سرور
+  useEffect(() => {
+    async function checkWatchlistStatus() {
+      if (!isLoggedIn) {
+        setSaved(false);
+        setCurrentStatus(null);
+        return;
+      }
+      
+      console.log('Checking watchlist status for movie:', movie.id);
+      
+      try {
+        const freshWatchlist = await getUserWatchlist(true);
+        console.log('Fresh watchlist from server:', freshWatchlist.length, 'items');
+        
+        const serverFound = freshWatchlist.find(item => item.title_id === movie.id);
+        
+        if (serverFound) {
+          console.log('Found on server with status:', serverFound.status);
+          setSaved(true);
+          setCurrentStatus(serverFound.status);
+        } else {
+          console.log('Not found on server');
+          setSaved(false);
+          setCurrentStatus(null);
+        }
+      } catch (error) {
+        console.error('Server check failed:', error);
+        const localWatchlist = getWatchlistFromLocalStorage();
+        const localFound = localWatchlist.find(item => item.title_id === movie.id);
+        if (localFound) {
+          setSaved(true);
+          setCurrentStatus(localFound.status);
+        } else {
+          setSaved(false);
+          setCurrentStatus(null);
+        }
+      }
+    }
+    
+    checkWatchlistStatus();
+  }, [movie.id, isLoggedIn]);
 
   useEffect(() => {
     async function fetchDetails() {
@@ -1104,23 +1205,44 @@ function MovieDetailPage({
     fetchDetails();
   }, [movie.id]);
 
-    // Handle save/unsave button click
-  const handleToggleSave = async () => {
+  // Handle save button click - opens modal
+  const handleSaveClick = () => {
     if (!isLoggedIn) {
       onAuthRequest();
       return;
     }
+    setShowWatchlistModal(true);
+  };
+
+  // Handle list selection با optimistic update
+  const handleSelectList = async (status: WatchlistStatus) => {
+    if (!status || !isLoggedIn) {
+      if (!isLoggedIn) onAuthRequest();
+      return;
+    }
     
-    try {
-      if (saved) {
-        await removeFromWatchlist(movie.id);
-        setSaved(false);
-      } else {
-        await addToWatchlist(movie.id);
-        setSaved(true);
-      }
-    } catch (error) {
-      alert('خطا در انجام عملیات. لطفاً دوباره تلاش کنید.');
+    if (currentStatus === status && saved) {
+      setShowWatchlistModal(false);
+      return;
+    }
+   
+    const previousSaved = saved;
+    const previousStatus = currentStatus;
+
+    setSaved(true);
+    setCurrentStatus(status);
+    setShowWatchlistModal(false);
+ 
+    const success = await syncWatchlistToServerAndLocal(movie.id, status, movie, previousSaved);
+    
+    if (!success) {
+      setSaved(previousSaved);
+      setCurrentStatus(previousStatus);
+      alert('خطا در اتصال به سرور. تغییرات ذخیره نشد.');
+    } else {
+      const statusText = status === 'want_to_watch' ? 'می‌خواهم تماشا کنم' : 
+                         status === 'watching' ? 'در حال تماشا' : 'تماشا شده';
+      alert(`"${movie.title}" با موفقیت به لیست ${statusText} اضافه شد`);
     }
   };
 
@@ -1195,7 +1317,33 @@ function MovieDetailPage({
           </div>
           <p className="text-white/60 text-sm leading-relaxed mb-8 max-w-2xl">{details?.summary || movie.summary}</p>
           <div className="flex gap-3 flex-wrap items-center">
-            <SaveButton saved={saved} onToggle={handleToggleSave} />
+            <SaveButton 
+              saved={saved}
+              status={currentStatus}
+              onToggle={handleSaveClick}
+              onSelectStatus={handleSelectList}
+              onRemove={async () => {
+                if (!isLoggedIn) {
+                  onAuthRequest();
+                  return;
+                }
+                try {
+                  const token = localStorage.getItem('access_token');
+                  if (!token) throw new Error('No token');
+                  await fetch(`http://localhost:8000/saved/${movie.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                  });
+                  updateWatchlistInLocalStorage(movie.id, null);
+                  setSaved(false);
+                  setCurrentStatus(null);
+                  alert(`"${movie.title}" از لیست تماشا حذف شد`);
+                } catch (error) {
+                  console.error('Error removing from watchlist:', error);
+                  alert('خطا در حذف از لیست تماشا');
+                }
+              }}
+            />
             {existingRating ? (
               <div className="flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5">
                 <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
@@ -1272,7 +1420,7 @@ function MovieDetailPage({
             <div className="space-y-2.5">
               {awards.map((a, i) => (
                 <div
-                  key={i}
+                  key={`award-${a.award_name}-${a.ceremony_year}-${a.category}-${i}`}
                   className="flex items-center gap-4 bg-[#1A1A1A] rounded-xl px-5 py-3.5 border border-white/8 hover:border-white/15 transition-colors"
                 >
                   <span className="text-white/35 text-xs font-mono w-16 flex-shrink-0">{toPersianDigits(a.ceremony_year)}</span>
@@ -1356,11 +1504,20 @@ function MovieDetailPage({
           </section>
         )}
       </div>
+
+      {/* Watchlist Selection Modal */}
+      <WatchlistModal
+        isOpen={showWatchlistModal}
+        onClose={() => setShowWatchlistModal(false)}
+        onSelect={handleSelectList}
+        currentStatus={currentStatus}
+        titleName={movie.title}
+      />
     </div>
   );
 }
 
-// ── Page 4: TV Series Detail (با اتصال به API) ─────────────────────────────────
+// ── Page 4: TV Series Detail (با اتصال به API و پشتیبانی از localStorage) ─────────────────
 
 function TVDetailPage({
   movie,
@@ -1382,6 +1539,8 @@ function TVDetailPage({
   onAuthRequest: () => void;
 }) {
   const [saved, setSaved] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState<WatchlistStatus | null>(null);
+  const [showWatchlistModal, setShowWatchlistModal] = useState(false);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const [pendingScore, setPendingScore] = useState(0);
   const [details, setDetails] = useState<TitleDetails | null>(null);
@@ -1395,6 +1554,50 @@ function TVDetailPage({
   const [isLoading, setIsLoading] = useState(true);
   const tvShow = movie;
   const existingRating = ratedTitles.find((r) => r.id === tvShow.id);
+
+  // Check watchlist status on load - با همگام‌سازی از سرور
+  useEffect(() => {
+    async function checkWatchlistStatus() {
+      if (!isLoggedIn) {
+        setSaved(false);
+        setCurrentStatus(null);
+        return;
+      }
+      
+      console.log('Checking watchlist status for TV series:', tvShow.id);
+      
+      try {
+        // دریافت تازه از سرور با forceRefresh=true
+        const freshWatchlist = await getUserWatchlist(true);
+        console.log('Fresh watchlist from server:', freshWatchlist.length, 'items');
+        
+        const serverFound = freshWatchlist.find(item => item.title_id === tvShow.id);
+        
+        if (serverFound) {
+          console.log('Found on server with status:', serverFound.status);
+          setSaved(true);
+          setCurrentStatus(serverFound.status);
+        } else {
+          console.log('Not found on server');
+          setSaved(false);
+          setCurrentStatus(null);
+        }
+      } catch (error) {
+        console.error('Server check failed:', error);
+        const localWatchlist = getWatchlistFromLocalStorage();
+        const localFound = localWatchlist.find(item => item.title_id === tvShow.id);
+        if (localFound) {
+          setSaved(true);
+          setCurrentStatus(localFound.status);
+        } else {
+          setSaved(false);
+          setCurrentStatus(null);
+        }
+      }
+    }
+    
+    checkWatchlistStatus();
+  }, [tvShow.id, isLoggedIn]);
 
   useEffect(() => {
     async function fetchDetails() {
@@ -1437,22 +1640,44 @@ function TVDetailPage({
     fetchDetails();
   }, [tvShow.id]);
 
-  const handleToggleSave = async () => {
+  // Handle save button click - opens modal
+  const handleSaveClick = () => {
     if (!isLoggedIn) {
       onAuthRequest();
       return;
     }
+    setShowWatchlistModal(true);
+  };
+
+  // Handle list selection با optimistic update
+  const handleSelectList = async (status: WatchlistStatus) => {
+    if (!status || !isLoggedIn) {
+      if (!isLoggedIn) onAuthRequest();
+      return;
+    }
     
-    try {
-      if (saved) {
-        await removeFromWatchlist(movie.id);
-        setSaved(false);
-      } else {
-        await addToWatchlist(movie.id);
-        setSaved(true);
-      }
-    } catch (error) {
-      alert('خطا در انجام عملیات. لطفاً دوباره تلاش کنید.');
+    if (currentStatus === status && saved) {
+      setShowWatchlistModal(false);
+      return;
+    }
+    
+    const previousSaved = saved;
+    const previousStatus = currentStatus;
+    
+    setSaved(true);
+    setCurrentStatus(status);
+    setShowWatchlistModal(false);
+    
+    const success = await syncWatchlistToServerAndLocal(tvShow.id, status, tvShow, previousSaved);
+    
+    if (!success) {
+      setSaved(previousSaved);
+      setCurrentStatus(previousStatus);
+      alert('خطا در اتصال به سرور. تغییرات ذخیره نشد.');
+    } else {
+      const statusText = status === 'want_to_watch' ? 'می‌خواهم تماشا کنم' : 
+                         status === 'watching' ? 'در حال تماشا' : 'تماشا شده';
+      alert(`"${tvShow.title}" با موفقیت به لیست ${statusText} اضافه شد`);
     }
   };
   
@@ -1548,7 +1773,33 @@ function TVDetailPage({
             {details?.summary || tvShow.summary}
           </p>
           <div className="flex gap-3 flex-wrap items-center">
-            <SaveButton saved={saved} onToggle={handleToggleSave} />
+            <SaveButton 
+              saved={saved}
+              status={currentStatus}
+              onToggle={handleSaveClick}
+              onSelectStatus={handleSelectList}
+              onRemove={async () => {
+                if (!isLoggedIn) {
+                  onAuthRequest();
+                  return;
+                }
+                try {
+                  const token = localStorage.getItem('access_token');
+                  if (!token) throw new Error('No token');
+                  await fetch(`http://localhost:8000/saved/${movie.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                  });
+                  updateWatchlistInLocalStorage(movie.id, null);
+                  setSaved(false);
+                  setCurrentStatus(null);
+                  alert(`"${movie.title}" از لیست تماشا حذف شد`);
+                } catch (error) {
+                  console.error('Error removing from watchlist:', error);
+                  alert('خطا در حذف از لیست تماشا');
+                }
+              }}
+            />
             {existingRating ? (
               <div className="flex items-center gap-3 bg-[#1A1A1A] border border-primary/30 rounded-lg px-4 py-2.5">
                 <span className="text-primary text-xs font-semibold uppercase tracking-wider">{t.detail.alreadyRated}</span>
@@ -1625,7 +1876,7 @@ function TVDetailPage({
             <div className="space-y-2.5">
               {awards.map((a, i) => (
                 <div
-                  key={i}
+                  key={`award-${a.award_name}-${a.ceremony_year}-${a.category}-${i}`}
                   className="flex items-center gap-4 bg-[#1A1A1A] rounded-xl px-5 py-3.5 border border-white/8 hover:border-white/15 transition-colors"
                 >
                   <span className="text-white/35 text-xs font-mono w-16 flex-shrink-0">{toPersianDigits(a.ceremony_year)}</span>
@@ -1681,9 +1932,9 @@ function TVDetailPage({
                     </button>
                     {expandedSeason === season.season_number && (
                       <div className="border-t border-white/6 dark:border-white/6 light:border-black/6 divide-y divide-white/5 dark:divide-white/5 light:divide-black/5">
-                        {seasonEpisodes.map((ep) => (
+                        {seasonEpisodes.map((ep, epIndex) => (
                           <div
-                            key={`season-${ep.season_number}-ep-${ep.episode_number}`}
+                            key={`season-${season.season_number}-ep-${ep.episode_number}-${epIndex}`}
                             className="flex items-start gap-5 px-6 py-4 hover:bg-white/2 dark:hover:bg-white/2 light:hover:bg-black/2 transition-colors"
                           >
                             <span className="text-white/25 dark:text-white/25 light:text-black/25 text-xs font-mono w-12 flex-shrink-0 mt-0.5 text-center">
@@ -1775,6 +2026,15 @@ function TVDetailPage({
           </section>
         )}
       </div>
+
+      {/* Watchlist Selection Modal */}
+      <WatchlistModal
+        isOpen={showWatchlistModal}
+        onClose={() => setShowWatchlistModal(false)}
+        onSelect={handleSelectList}
+        currentStatus={currentStatus}
+        titleName={movie.title}
+      />
     </div>
   );
 }
@@ -2207,7 +2467,7 @@ function BrowsePage({
   );
 }
 
-// ── Page 6: Profile (بدون تغییر) ──────────────────────────────────────────────
+// ── Page 6: Profile ──────────────────────────────────────────────────────────────
 
 function ProfilePage({
   setPage,
@@ -2225,7 +2485,13 @@ function ProfilePage({
   const [watchlistPage, setWatchlistPage] = useState(1);
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [isLoadingWatchlist, setIsLoadingWatchlist] = useState(true);
-  const [watchlistFilter, setWatchlistFilter] = useState<"all" | "movies" | "tv">("all");
+  
+  // فیلترهای پیشرفته
+  const [activeTypeFilter, setActiveTypeFilter] = useState<"all" | "movie" | "tv">("all");
+  const [activeStatusFilter, setActiveStatusFilter] = useState<WatchlistStatus | "all">("all");
+  const [activeSortBy, setActiveSortBy] = useState<"date" | "title" | "year">("date");
+  const [isFilterBarOpen, setIsFilterBarOpen] = useState(false);
+  
   const [userRatings, setUserRatings] = useState<UserRating[]>([]);
   const [isLoadingRatings, setIsLoadingRatings] = useState(true);
   const [reviewsPage, setReviewsPage] = useState(1);
@@ -2250,16 +2516,16 @@ function ProfilePage({
     total_watched: 0
   });
 
-  // Fetch profile from API
+  const allContent = [...MOVIES, ...TV_SERIES];
+
   useEffect(() => {
     async function fetchProfile() {
       setIsLoadingProfile(true);
       setIsLoadingWatchlist(true);
+      setIsLoadingRatings(true);
+      
       try {
-        // Fetch user profile data
         const data = await getUserProfile();
-        console.log('Profile data received:', data);
-        
         setProfileData(data);
         setProfileUsername(data.username);
         setProfileEmail(data.email);
@@ -2273,27 +2539,31 @@ function ProfilePage({
           total_watched: data.total_watched || 0
         });
 
-        // Fetch user watchlist
         try {
-          const watchlistData = await getUserWatchlist();
-          console.log('Watchlist data received:', watchlistData);
+          const watchlistData = await getUserWatchlist(true);
+          console.log('📋 Watchlist data received in profile:', watchlistData);
+          console.log('📊 Status distribution:', {
+            want_to_watch: watchlistData.filter(i => i.status === 'want_to_watch').length,
+            watching: watchlistData.filter(i => i.status === 'watching').length,
+            watched: watchlistData.filter(i => i.status === 'watched').length,
+          });
+         
+          console.log('🔍 First 3 items status:', watchlistData.slice(0, 3).map(i => ({ id: i.title_id, name: i.name_fa, status: i.status })));
           setWatchlistItems(watchlistData);
         } catch (watchlistErr) {
           console.error('Failed to fetch watchlist:', watchlistErr);
-          setWatchlistItems([]);
+          const localWatchlist = getWatchlistFromLocalStorage();
+          console.log('📋 Local watchlist:', localWatchlist);
+          setWatchlistItems(localWatchlist);
         }
-        // Fetch user ratings
+        
         try {
           const ratingsData = await getUserRatings();
-          console.log('Ratings data received:', ratingsData);
-          setUserRatings(ratingsData);
+          setUserRatings(ratingsData || []);
         } catch (ratingErr) {
-          console.error('Failed to fetch ratings:', ratingErr);
           setUserRatings([]);
         }
       } catch (error) {
-        console.error('Failed to fetch profile:', error);
-        // If API fails, show user data from props as fallback
         if (user) {
           setProfileUsername(user.username);
           setProfileEmail(user.email);
@@ -2317,12 +2587,14 @@ function ProfilePage({
   }
 
   function convertWatchlistToMovieData(item: WatchlistItem): MovieData {
+    const existingMovie = allContent.find(m => m.id === item.title_id);
+    if (existingMovie) return existingMovie;
     return {
       id: item.title_id,
       title: item.name_fa,
       originalTitle: item.name_en,
       img: item.poster_url || '/placeholder.jpg',
-      rating: item.score || 0,
+      rating: 0,
       year: item.release_year,
       duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
                 item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
@@ -2339,31 +2611,73 @@ function ProfilePage({
     };
   }
 
-  // Filter watchlist items based on selected filter
-  const filteredWatchlistItems = watchlistItems.filter(item => {
-    if (watchlistFilter === "movies") return item.t_type !== 'S';
-    if (watchlistFilter === "tv") return item.t_type === 'S';
-    return true;
-  });
+  function normalizeStatus(status: string): WatchlistStatus {
+    if (!status) return 'want_to_watch';
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'want to watch') return 'want_to_watch';
+    if (statusLower === 'watching') return 'watching';
+    if (statusLower === 'watched') return 'watched';
+    return 'want_to_watch';
+  }
+
+  let filteredWatchlist = [...watchlistItems];
+
+  if (activeStatusFilter !== "all") {
+    filteredWatchlist = filteredWatchlist.filter(item => {
+      const normalizedItemStatus = normalizeStatus(item.status);
+      return normalizedItemStatus === activeStatusFilter;
+    });
+  }
+
+  if (activeTypeFilter === "movie") {
+    filteredWatchlist = filteredWatchlist.filter(item => item.t_type !== 'S');
+  } else if (activeTypeFilter === "tv") {
+    filteredWatchlist = filteredWatchlist.filter(item => item.t_type === 'S');
+  }
+
+  if (activeSortBy === "title") {
+    filteredWatchlist.sort((a, b) => a.name_fa.localeCompare(b.name_fa));
+  } else if (activeSortBy === "year") {
+    filteredWatchlist.sort((a, b) => b.release_year - a.release_year);
+  } else if (activeSortBy === "date") {
+    filteredWatchlist.sort((a, b) => b.title_id - a.title_id);
+  }
 
   const ITEMS_PER_PAGE = 6;
-  const totalWlPages = Math.ceil(filteredWatchlistItems.length / ITEMS_PER_PAGE);
-  const paginatedWatchlist = filteredWatchlistItems.slice(
+  const totalWlPages = Math.ceil(filteredWatchlist.length / ITEMS_PER_PAGE);
+  const paginatedWatchlist = filteredWatchlist.slice(
     (watchlistPage - 1) * ITEMS_PER_PAGE, 
     watchlistPage * ITEMS_PER_PAGE
   );
 
   const stats = [
-    { label: t.profile.rated, value: profileStats.total_rated },
-    { label: t.profile.reviews, value: profileStats.total_written },
-    { label: t.profile.wantToWatch, value: profileStats.total_want_to_watch },
-    { label: t.profile.watching, value: profileStats.total_watching },
-    { label: t.profile.watched, value: profileStats.total_watched },
+    { label: t.profile.rated, value: profileStats.total_rated},
+    { label: t.profile.reviews, value: profileStats.total_written},
+    { label: t.profile.wantToWatch, value: profileStats.total_want_to_watch},
+    { label: t.profile.watching, value: profileStats.total_watching},
+    { label: t.profile.watched, value: profileStats.total_watched},
   ];
 
   const REVIEWS_PER_PAGE = 5;
   const totalReviewPages = Math.ceil(userRatings.length / REVIEWS_PER_PAGE);
   const paginatedReviews = userRatings.slice((reviewsPage - 1) * REVIEWS_PER_PAGE, reviewsPage * REVIEWS_PER_PAGE);
+
+  const wantToWatchCount = watchlistItems.filter(i => normalizeStatus(i.status) === 'want_to_watch').length;
+  const watchingCount = watchlistItems.filter(i => normalizeStatus(i.status) === 'watching').length;
+  const watchedCount = watchlistItems.filter(i => normalizeStatus(i.status) === 'watched').length;
+  
+  const typeFilters = [
+    { id: "all", label: "همه"},
+    { id: "movie", label: "فیلم‌ها",},
+    { id: "tv", label: "سریال‌ها"},
+  ];
+
+  const statusFilters = [
+    { id: "all", label: "همه", color: "bg-white/10", textColor: "text-white/70", count: watchlistItems.length },
+    { id: "want_to_watch", label: "می‌خواهم تماشا کنم", color: "bg-blue-500/20", textColor: "text-blue-400", count: wantToWatchCount },
+    { id: "watching", label: "در حال تماشا", color: "bg-yellow-500/20", textColor: "text-yellow-400", count: watchingCount },
+    { id: "watched", label: "تماشا شده", color: "bg-green-500/20", textColor: "text-green-400", count: watchedCount },
+  ];
 
   function openEdit(entry: UserRating) {
     setEditingId(entry.title_id);
@@ -2373,48 +2687,37 @@ function ProfilePage({
 
   async function saveEdit() {
     if (editingId === null || editScore === 0) return;
-    
     try {
       await addOrUpdateRating(editingId, {
         score: editScore,
         comment: editComment,
         is_spoiler: false,
       });
-      
-      // Update local state
       setUserRatings(prev => prev.map(r => 
         r.title_id === editingId 
           ? { ...r, rating_score: editScore, review_text: editComment }
           : r
       ));
-      
       onEditRating(editingId, editScore, editComment);
       setEditingId(null);
     } catch (error) {
-      console.error('Error updating rating:', error);
       alert('خطا در به روزرسانی امتیاز');
     }
   }
 
-  function confirmDelete(id: number) {
-    setConfirmDeleteId(id);
-  }
+  function confirmDelete(id: number) { setConfirmDeleteId(id); }
 
   async function executeDelete() {
     if (confirmDeleteId !== null) {
       try {
         await deleteRating(confirmDeleteId);
-        
-        // Update local state
         setUserRatings(prev => prev.filter(r => r.title_id !== confirmDeleteId));
         onDeleteRating(confirmDeleteId);
-        
         setConfirmDeleteId(null);
         const newTotal = userRatings.length - 1;
         const maxPage = Math.ceil(newTotal / REVIEWS_PER_PAGE) || 1;
         if (reviewsPage > maxPage) setReviewsPage(maxPage);
       } catch (error) {
-        console.error('Error deleting rating:', error);
         alert('خطا در حذف امتیاز');
       }
     }
@@ -2431,21 +2734,29 @@ function ProfilePage({
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-12">
+      {/* Profile Header - با طراحی جدید */}
       <div className="flex items-start gap-6 mb-12 pb-12 border-b border-white/8 dark:border-white/8 light:border-black/8">
-        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#E50914] to-[#5A0009] flex items-center justify-center text-white text-3xl font-bold flex-shrink-0 shadow-2xl overflow-hidden">
-          {profilePhotoUrl ? (
-            <img src={profilePhotoUrl} alt={profileUsername} className="w-full h-full object-cover" />
-          ) : (
-            getAvatarInitials(profileUsername)
-          )}
+        <div className="relative group">
+          <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#E50914] to-[#5A0009] flex items-center justify-center text-white text-4xl font-bold flex-shrink-0 shadow-2xl overflow-hidden ring-4 ring-primary/20 transition-all duration-300 group-hover:ring-primary/40">
+            {profilePhotoUrl ? (
+              <img src={profilePhotoUrl} alt={profileUsername} className="w-full h-full object-cover" />
+            ) : (
+              getAvatarInitials(profileUsername)
+            )}
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary border-2 border-background flex items-center justify-center">
+            <Edit2 size={12} className="text-white" />
+          </div>
         </div>
         <div className="flex-1">
-          <h1 className="text-[28px] font-bold text-white dark:text-white light:text-black mb-1" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
+          <h1 className="text-[32px] font-bold text-white dark:text-white light:text-black mb-2" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
             {profileUsername}
           </h1>
-          <p className="text-white/35 dark:text-white/35 light:text-black/35 text-sm mb-1 font-mono">{profileEmail}</p>
+          <p className="text-white/35 dark:text-white/35 light:text-black/35 text-sm mb-2 font-mono flex items-center gap-2">
+            <Mail size={14} /> {profileEmail}
+          </p>
           <p className="text-white/25 text-xs flex items-center gap-1.5">
-            <Calendar size={11} /> {t.profile.memberSince} 
+            <Calendar size={12} /> {t.profile.memberSince} 
             {profileJoinDate ? new Date(profileJoinDate).toLocaleDateString('fa-IR') : 'اخیرا'}
           </p>
         </div>
@@ -2457,89 +2768,251 @@ function ProfilePage({
             setEditPassword("");
             setShowEditProfile(true); 
           }}
-          className="..."
+          className="flex items-center gap-2 px-5 py-2.5 bg-white/8 backdrop-blur-sm border border-white/15 rounded-xl text-white/70 hover:text-white hover:border-white/30 hover:bg-white/12 transition-all duration-300 text-sm font-medium"
         >
           <Edit2 size={14} /> {t.profile.editProfile}
         </button>
       </div>
 
-      {/* Stats Cards - Now showing real data from API */}
+      {/* Stats Cards - با طراحی کارتی جدید */}
       <div className="grid grid-cols-5 gap-4 mb-14">
         {stats.map((s) => (
-          <div key={s.label} className="bg-card rounded-2xl p-6 border border-white/8 dark:border-white/8 light:border-black/8 text-center hover:border-white/15 dark:hover:border-white/15 light:hover:border-black/15 transition-colors">
-            <p className="text-4xl font-bold text-white dark:text-white light:text-black mb-1" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
+          <div key={s.label} className="group relative overflow-hidden bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-sm rounded-2xl p-5 border border-white/8 hover:border-white/20 transition-all duration-300 hover:-translate-y-1">
+            <div className="absolute top-3 right-3 text-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
+            <p className="text-3xl font-bold text-white mb-1" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
               {toPersianDigits(s.value)}
             </p>
-            <p className="text-white/40 dark:text-white/40 light:text-black/40 text-xs uppercase tracking-wider font-mono">{s.label}</p>
+            <p className="text-white/40 text-xs uppercase tracking-wider font-mono">{s.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Watchlist Section - Now showing real data from API */}
+      {/* Watchlist Section - طراحی حرفه‌ای جدید */}
       <section className="mb-14">
-        <SectionHeader title={t.profile.watchlist} />
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-8 bg-primary rounded-full" />
+            <h2 className="text-2xl font-bold text-white" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
+              {t.profile.watchlist}
+            </h2>
+          </div>
+          
+          {/* دکمه تغییر وضعیت فیلتر */}
+          <button
+            onClick={() => setIsFilterBarOpen(!isFilterBarOpen)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 text-sm text-white/70"
+          >
+            <Filter size={14} />
+            فیلترها
+            <ChevronDown size={14} className={`transition-transform duration-300 ${isFilterBarOpen ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+
+        {/* نوار فیلتر پیشرفته - با انیمیشن */}
+        <div className={`overflow-hidden transition-all duration-500 ease-out ${isFilterBarOpen ? "max-h-96 opacity-100 mb-8" : "max-h-0 opacity-0"}`}>
+          <div className="bg-gradient-to-r from-white/5 to-white/0 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            {/* فیلتر وضعیت - دکمه‌های رنگی با آمار */}
+            <div className="mb-6">
+              <p className="text-white/40 text-xs font-mono uppercase tracking-wider mb-4 flex items-center gap-2">
+                <List size={12} /> وضعیت تماشا
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {statusFilters.map((filter) => (
+                  <button
+                    key={filter.id}
+                    onClick={() => { setActiveStatusFilter(filter.id as any); setWatchlistPage(1); }}
+                    className={`relative px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                      activeStatusFilter === filter.id
+                        ? `${filter.color} ${filter.textColor} border-2 border-current shadow-lg scale-[1.02]`
+                        : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {filter.label}
+                      {filter.count > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          activeStatusFilter === filter.id ? "bg-white/20" : "bg-white/10"
+                        }`}>
+                          {toPersianDigits(filter.count)}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* فیلتر نوع و مرتب‌سازی در یک ردیف */}
+            <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/10">
+              <div className="flex items-center gap-4">
+                <p className="text-white/40 text-xs font-mono uppercase tracking-wider">نوع محتوا</p>
+                <div className="flex gap-1 bg-white/5 rounded-xl p-1">
+                  {typeFilters.map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => { setActiveTypeFilter(filter.id as any); setWatchlistPage(1); }}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        activeTypeFilter === filter.id
+                          ? "bg-primary text-white shadow-lg"
+                          : "text-white/50 hover:text-white/80"
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <p className="text-white/40 text-xs font-mono uppercase tracking-wider">مرتب‌سازی بر اساس</p>
+                <div className="flex gap-1 bg-white/5 rounded-xl p-1">
+                  {[
+                    { id: "date", label: "جدیدترین"},
+                    { id: "title", label: "عنوان"},
+                    { id: "year", label: "سال"},
+                  ].map((sort) => (
+                    <button
+                      key={sort.id}
+                      onClick={() => { setActiveSortBy(sort.id as any); setWatchlistPage(1); }}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        activeSortBy === sort.id
+                          ? "bg-primary text-white shadow-lg"
+                          : "text-white/50 hover:text-white/80"
+                      }`}
+                    >
+                      {sort.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* دکمه ریست فیلترها */}
+            {(activeStatusFilter !== "all" || activeTypeFilter !== "all") && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => {
+                    setActiveStatusFilter("all");
+                    setActiveTypeFilter("all");
+                    setActiveSortBy("date");
+                    setWatchlistPage(1);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
+                >
+                  <X size={12} /> پاک کردن فیلترها
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        
         {isLoadingWatchlist ? (
-          <div className="text-center py-12">
-            <div className="inline-block w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-            <p className="text-white/40 mt-3 text-sm">در حال بارگذاری...</p>
+          <div className="text-center py-20">
+            <div className="inline-block w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            <p className="text-white/40 mt-4 text-sm">در حال بارگذاری لیست تماشا...</p>
           </div>
         ) : watchlistItems.length === 0 ? (
-          <div className="text-center py-16 bg-card rounded-2xl border border-white/8 dark:border-white/8 light:border-black/12">
-            <Bookmark size={32} className="text-white/15 dark:text-white/15 light:text-black/20 mx-auto mb-3" />
-            <p className="text-white/40 dark:text-white/40 light:text-black/50 text-sm">هنوز چیزی به لیست تماشا اضافه نکرده‌اید</p>
+          <div className="text-center py-24 bg-gradient-to-br from-white/5 to-white/0 rounded-2xl border border-white/8">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+              <Bookmark size={32} className="text-white/20" />
+            </div>
+            <p className="text-white/40 text-base mb-2">لیست تماشای شما خالی است</p>
+            <p className="text-white/25 text-sm">با افزودن فیلم و سریال به لیست تماشا، آنها را اینجا مشاهده خواهید کرد</p>
           </div>
         ) : (
           <>
-            <div className="flex gap-1 mb-6 bg-card border border-white/8 dark:border-white/8 light:border-black/8 rounded-xl p-1 w-fit">
-              {(["all", "movies", "tv"] as const).map((filter) => (
+            {/* نمایش نتایج و وضعیت فعال */}
+            <div className="flex items-center justify-between mb-6">
+              <p className="text-white/40 text-sm flex items-center gap-2">
+                <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                {toPersianDigits(filteredWatchlist.length)} عنوان در لیست تماشا
+                {activeStatusFilter !== "all" && (
+                  <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs">
+                    {statusFilters.find(f => f.id === activeStatusFilter)?.label}
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* گرید لیست تماشا */}
+            {paginatedWatchlist.length === 0 ? (
+              <div className="text-center py-16 bg-white/5 rounded-2xl border border-white/8">
+                <p className="text-white/40 text-sm">هیچ عنوانی با این فیلترها یافت نشد</p>
                 <button
-                  key={filter}
-                  onClick={() => { setWatchlistFilter(filter); setWatchlistPage(1); }}
-                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${
-                    watchlistFilter === filter ? "bg-primary text-white shadow-lg shadow-[#E50914]/20" : "text-white/50 dark:text-white/50 light:text-black/50 hover:text-white dark:hover:text-white light:hover:text-black"
-                  }`}
+                  onClick={() => {
+                    setActiveStatusFilter("all");
+                    setActiveTypeFilter("all");
+                    setActiveSortBy("date");
+                    setWatchlistPage(1);
+                  }}
+                  className="mt-3 text-primary text-xs hover:text-primary/80 transition-colors"
                 >
-                  {filter === "tv" ? t.profile.tvShows : filter === "movies" ? t.browse.movies : t.browse.all}
+                  نمایش همه عنوان‌ها
                 </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-6 gap-4 mb-6">
-              {paginatedWatchlist.map((item) => {
-                const movieData = convertWatchlistToMovieData(item);
-                return (
-                  <MovieCard 
-                    key={item.title_id} 
-                    movie={movieData} 
-                    onClick={() => setPage(movieData.type === "TV" ? "tv" : "movie", movieData)} 
-                    showTypeBadge 
-                  />
-                );
-              })}
-            </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-6 gap-5 mb-8">
+                {paginatedWatchlist.map((item) => {
+                  const movieData = convertWatchlistToMovieData(item);
+                  return (
+                    <div key={item.title_id} className="transform transition-all duration-300 hover:-translate-y-2">
+                      <MovieCard 
+                        movie={movieData} 
+                        onClick={() => setPage(movieData.type === "TV" ? "tv" : "movie", movieData)} 
+                        showTypeBadge 
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* صفحه‌بندی مدرن */}
             {totalWlPages > 1 && (
-              <div className="flex items-center justify-center gap-2">
+              <div className="flex items-center justify-center gap-2 mt-8">
                 <button 
                   onClick={() => setWatchlistPage((p) => Math.max(1, p - 1))} 
                   disabled={watchlistPage === 1} 
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
+                  className="flex items-center gap-1 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 text-sm"
                 >
-                  <ChevronRight size={14} /> {t.browse.previous}
+                  <ChevronRight size={16} /> قبلی
                 </button>
-                {Array.from({ length: totalWlPages }, (_, i) => i + 1).map((p) => (
-                  <button 
-                    key={p} 
-                    onClick={() => setWatchlistPage(p)} 
-                    className={`w-10 h-10 rounded-xl text-sm font-medium transition-all ${p === watchlistPage ? "bg-primary text-white shadow-lg shadow-[#E50914]/20" : "bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black"}`}
-                  >
-                    {toPersianDigits(p)}
-                  </button>
-                ))}
+                <div className="flex gap-1.5">
+                  {Array.from({ length: Math.min(totalWlPages, 5) }, (_, i) => i + 1).map((p) => (
+                    <button 
+                      key={p} 
+                      onClick={() => setWatchlistPage(p)} 
+                      className={`w-9 h-9 rounded-xl text-sm font-medium transition-all duration-300 ${
+                        p === watchlistPage
+                          ? "bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/30 scale-105"
+                          : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {toPersianDigits(p)}
+                    </button>
+                  ))}
+                  {totalWlPages > 5 && (
+                    <>
+                      <span className="text-white/30 px-2">...</span>
+                      <button 
+                        onClick={() => setWatchlistPage(totalWlPages)} 
+                        className={`w-9 h-9 rounded-xl text-sm font-medium transition-all duration-300 ${
+                          totalWlPages === watchlistPage
+                            ? "bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/30 scale-105"
+                            : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        {toPersianDigits(totalWlPages)}
+                      </button>
+                    </>
+                  )}
+                </div>
                 <button 
                   onClick={() => setWatchlistPage((p) => Math.min(totalWlPages, p + 1))} 
                   disabled={watchlistPage === totalWlPages} 
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm"
+                  className="flex items-center gap-1 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 text-sm"
                 >
-                  {t.browse.next} <ChevronLeft size={14} />
+                  بعدی <ChevronLeft size={16} />
                 </button>
               </div>
             )}
@@ -2547,131 +3020,112 @@ function ProfilePage({
         )}
       </section>
 
-      {/* Rest of your existing ProfilePage code (ratings and reviews section, edit modals, etc.) remains the same */}
+      {/* Ratings and Reviews Section - با طراحی بهبود یافته */}
       <section>
-      <SectionHeader title={t.profile.ratingsAndReviews} />
-      {isLoadingRatings ? (
-        <div className="text-center py-12">
-          <div className="inline-block w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-          <p className="text-white/40 mt-3 text-sm">در حال بارگذاری نظرات...</p>
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-1 h-8 bg-primary rounded-full" />
+          <h2 className="text-2xl font-bold text-white" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>
+            {t.profile.ratingsAndReviews}
+          </h2>
         </div>
-      ) : userRatings.length === 0 ? (
-          <div className="text-center py-16 bg-card rounded-2xl border border-white/8 dark:border-white/8 light:border-black/12">
-            <Star size={32} className="text-white/15 dark:text-white/15 light:text-black/20 mx-auto mb-3" />
-            <p className="text-white/40 dark:text-white/40 light:text-black/50 text-sm">{t.profile.noRatingsYet}</p>
+        
+        {isLoadingRatings ? (
+          <div className="text-center py-20">
+            <div className="inline-block w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            <p className="text-white/40 mt-4 text-sm">در حال بارگذاری نظرات...</p>
+          </div>
+        ) : userRatings.length === 0 ? (
+          <div className="text-center py-24 bg-gradient-to-br from-white/5 to-white/0 rounded-2xl border border-white/8">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+              <Star size={32} className="text-white/20" />
+            </div>
+            <p className="text-white/40 text-base mb-2">هنوز امتیازی ثبت نکرده‌اید</p>
+            <p className="text-white/25 text-sm">با امتیاز دادن به فیلم‌ها و سریال‌ها، آنها را اینجا مشاهده خواهید کرد</p>
           </div>
         ) : (
           <>
-            <div className="space-y-4 mb-6">
-            {paginatedReviews.map((rating) => (
-              <div key={rating.title_id} className="flex gap-5 bg-card rounded-2xl p-5 border border-white/8 dark:border-white/8 light:border-black/12 hover:border-white/15 dark:hover:border-white/15 light:hover:border-primary/30 transition-all">
-                <img
-                  src={rating.poster_url || '/placeholder.jpg'}
-                  alt={rating.title_name_fa}
-                  className="w-14 h-20 object-cover rounded-lg flex-shrink-0 border border-white/10 dark:border-white/10 light:border-black/15 cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => {
-                    // Navigate to movie or TV page
-                    const movieData: MovieData = {
-                      id: rating.title_id,
-                      title: rating.title_name_fa,
-                      originalTitle: rating.title_name_en,
-                      img: rating.poster_url || '/placeholder.jpg',
-                      rating: rating.rating_score,
-                      year: new Date(rating.rating_date).getFullYear(),
-                      duration: 'نامشخص',
-                      age: 'نامشخص',
-                      summary: '',
-                      genres: [],
-                      type: rating.t_type === 'S' ? 'TV' : 'Movie',
-                      voteCount: 0,
-                      similarMovieIds: [],
-                      cast: [],
-                      crew: [],
-                      awards: [],
-                      reviews: [],
-                    };
-                    setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3
+            <div className="space-y-4 mb-8">
+              {paginatedReviews.map((rating) => {
+                const movieData = allContent.find(m => m.id === rating.title_id);
+                return (
+                  <div key={rating.title_id} className="group bg-gradient-to-r from-white/5 to-white/0 rounded-2xl p-5 border border-white/8 hover:border-white/15 hover:bg-white/5 transition-all duration-300">
+                    <div className="flex gap-5">
+                      <img
+                        src={rating.poster_url || '/placeholder.jpg'}
+                        alt={rating.title_name_fa}
+                        className="w-16 h-24 object-cover rounded-xl flex-shrink-0 border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => {
-                          const movieData: MovieData = {
-                            id: rating.title_id,
-                            title: rating.title_name_fa,
-                            originalTitle: rating.title_name_en,
-                            img: rating.poster_url || '/placeholder.jpg',
-                            rating: rating.rating_score,
-                            year: new Date(rating.rating_date).getFullYear(),
-                            duration: 'نامشخص',
-                            age: 'نامشخص',
-                            summary: '',
-                            genres: [],
-                            type: rating.t_type === 'S' ? 'TV' : 'Movie',
-                            voteCount: 0,
-                            similarMovieIds: [],
-                            cast: [],
-                            crew: [],
-                            awards: [],
-                            reviews: [],
-                          };
-                          setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
+                          if (movieData) setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
                         }}
-                        className="text-foreground font-semibold text-sm hover:text-primary transition-colors cursor-pointer"
-                      >
-                        {rating.title_name_fa}
-                      </h3>
-                      <p className="text-white/35 dark:text-white/35 light:text-black/40 text-xs mt-0.5">
-                        {new Date(rating.rating_date).toLocaleDateString('fa-IR')}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                      <div className="flex items-center gap-1">
-                        <RatingDisplay rating={rating.rating_score} size="sm" />
-                        <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">/{toPersianDigits(10)}</span>
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
+                          <div>
+                            <h3
+                              onClick={() => {
+                                if (movieData) setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
+                              }}
+                              className="text-foreground font-semibold text-base hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {rating.title_name_fa}
+                            </h3>
+                            <p className="text-white/35 text-xs mt-1 flex items-center gap-2">
+                              <span className="flex items-center gap-1"><Calendar size={10} /> {new Date(rating.rating_date).toLocaleDateString('fa-IR')}</span>
+                              <span className="w-1 h-1 rounded-full bg-white/20" />
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] ${rating.t_type === 'S' ? "bg-blue-500/20 text-blue-400" : "bg-purple-500/20 text-purple-400"}`}>
+                                {rating.t_type === 'S' ? "سریال" : "فیلم"}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5">
+                              <RatingDisplay rating={rating.rating_score} size="sm" />
+                              <span className="text-white/30 text-xs">/{toPersianDigits(10)}</span>
+                            </div>
+                            <button
+                              onClick={() => openEdit(rating)}
+                              className="p-2 text-white/30 hover:text-white/70 hover:bg-white/10 rounded-xl transition-all"
+                              title={t.profile.edit}
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => confirmDelete(rating.title_id)}
+                              className="p-2 text-white/30 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                              title={t.profile.delete}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                        {rating.review_text ? (
+                          <p className="text-white/45 text-sm leading-relaxed line-clamp-2 mt-2">{rating.review_text}</p>
+                        ) : (
+                          <p className="text-white/20 text-xs italic mt-2">{t.profile.noWrittenReview}</p>
+                        )}
                       </div>
-                      <button
-                        onClick={() => openEdit(rating)}
-                        className="p-1.5 text-white/30 dark:text-white/30 light:text-black/40 hover:text-white/70 dark:hover:text-white/70 light:hover:text-black/70 hover:bg-white/8 dark:hover:bg-white/8 light:hover:bg-black/8 rounded-lg transition-all"
-                        title={t.profile.edit}
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(rating.title_id)}
-                        className="p-1.5 text-white/30 dark:text-white/30 light:text-black/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
-                        title={t.profile.delete}
-                      >
-                        <Trash2 size={13} />
-                      </button>
                     </div>
                   </div>
-                  {rating.review_text ? (
-                    <div>
-                      <p className="text-white/45 dark:text-white/45 light:text-black/55 text-sm leading-relaxed line-clamp-2">{rating.review_text}</p>
-                      {rating.is_spoiler && (
-                        <span className="inline-block mt-1 text-xs text-amber-500">⚠️ حاوی اسپویلر</span>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-white/20 dark:text-white/20 light:text-black/30 text-xs italic">{t.profile.noWrittenReview}</p>
-                  )}
-                </div>
-              </div>
-            ))}
+                );
+              })}
             </div>
+            
             {totalReviewPages > 1 && (
               <div className="flex items-center justify-center gap-2">
-                <button onClick={() => setReviewsPage((p) => Math.max(1, p - 1))} disabled={reviewsPage === 1} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm">
-                  <ChevronRight size={14} /> {t.browse.previous}
+                <button onClick={() => setReviewsPage((p) => Math.max(1, p - 1))} disabled={reviewsPage === 1} className="flex items-center gap-1 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm">
+                  <ChevronRight size={16} /> قبلی
                 </button>
-                {Array.from({ length: totalReviewPages }, (_, i) => i + 1).map((p) => (
-                  <button key={p} onClick={() => setReviewsPage(p)} className={`w-10 h-10 rounded-xl text-sm font-medium transition-all ${p === reviewsPage ? "bg-primary text-white shadow-lg shadow-[#E50914]/20" : "bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black"}`}>{toPersianDigits(p)}</button>
+                {Array.from({ length: Math.min(totalReviewPages, 5) }, (_, i) => i + 1).map((p) => (
+                  <button key={p} onClick={() => setReviewsPage(p)} className={`w-9 h-9 rounded-xl text-sm font-medium transition-all ${p === reviewsPage ? "bg-primary text-white shadow-lg scale-105" : "bg-white/5 text-white/50 hover:bg-white/10"}`}>{toPersianDigits(p)}</button>
                 ))}
-                <button onClick={() => setReviewsPage((p) => Math.min(totalReviewPages, p + 1))} disabled={reviewsPage === totalReviewPages} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-card border border-white/10 dark:border-white/10 light:border-black/10 text-white/60 dark:text-white/60 light:text-black/60 hover:text-white dark:hover:text-white light:hover:text-black disabled:opacity-25 disabled:cursor-not-allowed transition-all text-sm">
-                  {t.browse.next} <ChevronLeft size={14} />
+                {totalReviewPages > 5 && (
+                  <>
+                    <span className="text-white/30 px-2">...</span>
+                    <button onClick={() => setReviewsPage(totalReviewPages)} className={`w-9 h-9 rounded-xl text-sm font-medium transition-all ${totalReviewPages === reviewsPage ? "bg-primary text-white shadow-lg scale-105" : "bg-white/5 text-white/50 hover:bg-white/10"}`}>{toPersianDigits(totalReviewPages)}</button>
+                  </>
+                )}
+                <button onClick={() => setReviewsPage((p) => Math.min(totalReviewPages, p + 1))} disabled={reviewsPage === totalReviewPages} className="flex items-center gap-1 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm">
+                  بعدی <ChevronLeft size={16} />
                 </button>
               </div>
             )}
@@ -2679,7 +3133,7 @@ function ProfilePage({
         )}
       </section>
 
-      {/* Edit Profile Modal */}
+      {/* Edit Profile Modal - بدون تغییر */}
       {showEditProfile && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setShowEditProfile(false)}>
           <div className="bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -2690,139 +3144,34 @@ function ProfilePage({
             <div className="space-y-5">
               <div>
                 <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">{t.editProfile.username}</label>
-                <input
-                  type="text"
-                  value={editUsername}
-                  onChange={(e) => setEditUsername(e.target.value)}
-                  className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors"
-                />
+                <input type="text" value={editUsername} onChange={(e) => setEditUsername(e.target.value)} className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
               </div>
               <div>
                 <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">{t.editProfile.email}</label>
-                <input
-                  type="email"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors"
-                />
+                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
               </div>
-
-              {/* Add this after the email input field and before the DELETE ACCOUNT section */}
               <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">
-                  آدرس عکس پروفایل
-                </label>
-                <input
-                  type="url"
-                  value={editPhotoUrl}
-                  onChange={(e) => setEditPhotoUrl(e.target.value)}
-                  placeholder="https://example.com/photo.jpg"
-                  className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors"
-                />
+                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">آدرس عکس پروفایل</label>
+                <input type="url" value={editPhotoUrl} onChange={(e) => setEditPhotoUrl(e.target.value)} placeholder="https://example.com/photo.jpg" className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
               </div>
-
               <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">
-                  رمز عبور جدید (اختیاری)
-                </label>
-                <input
-                  type="password"
-                  value={editPassword}
-                  onChange={(e) => setEditPassword(e.target.value)}
-                  placeholder="رمز عبور جدید"
-                  className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors"
-                />
+                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">رمز عبور جدید (اختیاری)</label>
+                <input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="رمز عبور جدید" className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
               </div>
-
-              {/* DELETE ACCOUNT BUTTON - ADD THIS HERE */}
               <div className="pt-4 border-t border-white/10">
-                <button
-                  onClick={async () => {
-                    if (window.confirm('آیا از حذف حساب کاربری خود اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) {
-                      try {
-                        await deleteProfile();
-                        localStorage.removeItem('access_token');
-                        localStorage.removeItem('user_data');
-                        setPage("home");
-                        window.location.reload();
-                      } catch (error) {
-                        console.error('Error deleting profile:', error);
-                        alert('خطا در حذف حساب کاربری');
-                      }
-                    }
-                  }}
-                  className="w-full px-6 py-3 bg-red-600/20 border border-red-500/50 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-600/30 transition-all"
-                >
-                  حذف حساب کاربری
-                </button>
-                <p className="text-white/30 text-xs text-center mt-2">
-                  این عمل تمام اطلاعات شما را برای همیشه حذف خواهد کرد
-                </p>
+                <button onClick={async () => { if (window.confirm('آیا از حذف حساب کاربری خود اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) { try { await deleteProfile(); localStorage.removeItem('access_token'); localStorage.removeItem('user_data'); localStorage.removeItem('user_watchlist'); setPage("home"); window.location.reload(); } catch (error) { alert('خطا در حذف حساب کاربری'); } } }} className="w-full px-6 py-3 bg-red-600/20 border border-red-500/50 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-600/30 transition-all">حذف حساب کاربری</button>
+                <p className="text-white/30 text-xs text-center mt-2">این عمل تمام اطلاعات شما را برای همیشه حذف خواهد کرد</p>
               </div>
-
-              {/* SAVE AND CANCEL BUTTONS */}
               <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowEditProfile(false)}
-                  className="flex-1 px-6 py-3 bg-white/8 dark:bg-white/8 light:bg-black/8 border border-white/15 dark:border-white/15 light:border-black/15 text-white dark:text-white light:text-black rounded-lg text-sm font-medium hover:bg-white/12 dark:hover:bg-white/12 light:hover:bg-black/12 transition-all"
-                >
-                  {t.editProfile.cancel}
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const updateData: { 
-                        username?: string; 
-                        password?: string;
-                        photo_url?: string;
-                      } = {};
-                      
-                      if (editUsername.trim() && editUsername !== profileUsername) {
-                        updateData.username = editUsername.trim();
-                      }
-                      
-                      if (editPassword.trim()) {
-                        updateData.password = editPassword.trim();
-                      }
-                      
-                      if (editPhotoUrl.trim() && editPhotoUrl !== profilePhotoUrl) {
-                        updateData.photo_url = editPhotoUrl.trim();
-                      }
-                      
-                      if (Object.keys(updateData).length > 0) {
-                        await updateProfile(updateData);
-                        
-                        if (updateData.username) setProfileUsername(updateData.username);
-                        if (updateData.photo_url) setProfilePhotoUrl(updateData.photo_url);
-                        
-                        const currentUser = JSON.parse(localStorage.getItem('user_data') || '{}');
-                        const updatedUser = { ...currentUser, ...updateData };
-                        localStorage.setItem('user_data', JSON.stringify(updatedUser));
-                        
-                        alert('پروفایل با موفقیت به روزرسانی شد');
-                      } else {
-                        alert('هیچ تغییری اعمال نشده است');
-                      }
-                      
-                      setShowEditProfile(false);
-                      setEditPassword("");
-                      setEditPhotoUrl("");
-                    } catch (error) {
-                      console.error('Error updating profile:', error);
-                      alert('خطا در به روزرسانی پروفایل');
-                    }
-                  }}
-                  className="flex-1 px-6 py-3 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent active:bg-primary/90 transition-all shadow-lg shadow-[#E50914]/20 hover:shadow-[#E50914]/40"
-                >
-                  {t.editProfile.saveChanges}
-                </button>
+                <button onClick={() => setShowEditProfile(false)} className="flex-1 px-6 py-3 bg-white/8 dark:bg-white/8 light:bg-black/8 border border-white/15 dark:border-white/15 light:border-black/15 text-white dark:text-white light:text-black rounded-lg text-sm font-medium hover:bg-white/12 dark:hover:bg-white/12 light:hover:bg-black/12 transition-all">{t.editProfile.cancel}</button>
+                <button onClick={async () => { try { const updateData: { username?: string; password?: string; photo_url?: string; } = {}; if (editUsername.trim() && editUsername !== profileUsername) updateData.username = editUsername.trim(); if (editPassword.trim()) updateData.password = editPassword.trim(); if (editPhotoUrl.trim() && editPhotoUrl !== profilePhotoUrl) updateData.photo_url = editPhotoUrl.trim(); if (Object.keys(updateData).length > 0) { await updateProfile(updateData); if (updateData.username) setProfileUsername(updateData.username); if (updateData.photo_url) setProfilePhotoUrl(updateData.photo_url); const currentUser = JSON.parse(localStorage.getItem('user_data') || '{}'); const updatedUser = { ...currentUser, ...updateData }; localStorage.setItem('user_data', JSON.stringify(updatedUser)); alert('پروفایل با موفقیت به روزرسانی شد'); } else { alert('هیچ تغییری اعمال نشده است'); } setShowEditProfile(false); setEditPassword(""); setEditPhotoUrl(""); } catch (error) { alert('خطا در به روزرسانی پروفایل'); } }} className="flex-1 px-6 py-3 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent active:bg-primary/90 transition-all shadow-lg shadow-[#E50914]/20 hover:shadow-[#E50914]/40">{t.editProfile.saveChanges}</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Rating Modal */}
+      {/* Edit Rating Modal - بدون تغییر */}
       {editingId !== null && (() => {
         const rating = userRatings.find(r => r.title_id === editingId);
         if (!rating) return null;
@@ -2838,36 +3187,18 @@ function ProfilePage({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-white/60 dark:text-white/60 light:text-black/60 text-sm">{t.editRating.yourRating} <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">({t.editRating.required})</span></label>
-                    {editScore > 0 && (
-                      <span className="text-amber-400 font-semibold">{toPersianDigits(editScore)}/{toPersianDigits(10)}</span>
-                    )}
+                    {editScore > 0 && (<span className="text-amber-400 font-semibold">{toPersianDigits(editScore)}/{toPersianDigits(10)}</span>)}
                   </div>
                   <HalfStarRating value={editScore} onChange={setEditScore} size={26} />
-                  {editScore === 0 && (
-                    <p className="text-primary text-xs mt-2">{t.editRating.scoreRequired}</p>
-                  )}
+                  {editScore === 0 && (<p className="text-primary text-xs mt-2">{t.editRating.scoreRequired}</p>)}
                 </div>
                 <div>
-                  <label className="block text-white/60 text-sm mb-2">
-                    {t.editRating.review} <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">({t.editRating.optional})</span>
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={editComment}
-                    onChange={(e) => setEditComment(e.target.value)}
-                    className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/15 rounded-lg px-4 py-3 text-foreground placeholder:text-white/25 dark:placeholder:text-white/25 light:placeholder:text-black/30 text-sm focus:outline-none focus:border-primary/40 transition-colors resize-none"
-                    placeholder={t.editRating.reviewPlaceholderLong}
-                  />
+                  <label className="block text-white/60 text-sm mb-2">{t.editRating.review} <span className="text-white/30 dark:text-white/30 light:text-black/40 text-xs">({t.editRating.optional})</span></label>
+                  <textarea rows={4} value={editComment} onChange={(e) => setEditComment(e.target.value)} className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/15 rounded-lg px-4 py-3 text-foreground placeholder:text-white/25 dark:placeholder:text-white/25 light:placeholder:text-black/30 text-sm focus:outline-none focus:border-primary/40 transition-colors resize-none" placeholder={t.editRating.reviewPlaceholderLong} />
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => setEditingId(null)} className="flex-1 px-6 py-3 bg-white/8 dark:bg-white/8 light:bg-white border border-white/15 dark:border-white/15 light:border-black/20 text-foreground rounded-lg text-sm font-medium hover:bg-white/12 dark:hover:bg-white/12 light:hover:bg-black/5 transition-all">{t.editRating.cancel}</button>
-                  <button
-                    onClick={saveEdit}
-                    disabled={editScore === 0}
-                    className="flex-1 px-6 py-3 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t.editRating.saveChanges}
-                  </button>
+                  <button onClick={saveEdit} disabled={editScore === 0} className="flex-1 px-6 py-3 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed">{t.editRating.saveChanges}</button>
                 </div>
               </div>
             </div>
@@ -2875,7 +3206,7 @@ function ProfilePage({
         );
       })()}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal - بدون تغییر */}
       {confirmDeleteId !== null && (() => {
         const rating = userRatings.find(r => r.title_id === confirmDeleteId);
         if (!rating) return null;
@@ -2920,7 +3251,7 @@ export default function App() {
     return "dark";
   });
 
-// Load user from localStorage on app start
+  // Load user from localStorage on app start
   useEffect(() => {
     const userData = localStorage.getItem('user_data');
     const token = localStorage.getItem('access_token');
@@ -2967,8 +3298,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
-  function handleLogin() {
-    // Load user data from localStorage after login
+  async function handleLogin() {
     const userData = localStorage.getItem('user_data');
     if (userData) {
       try {
@@ -2980,12 +3310,22 @@ export default function App() {
     }
     setIsLoggedIn(true);
     setAuthGateModal(null);
+    
+    console.log('🔄 Syncing watchlist after login...');
+    try {
+      const watchlist = await syncWatchlistFromServer();
+      console.log('✅ Watchlist synced:', watchlist.length, 'items');
+      if (watchlist.length > 0) {
+      }
+    } catch (error) {
+      console.error('❌ Failed to sync watchlist:', error);
+    }
   }
 
   function handleLogout() {
-    // Clear all stored data
     localStorage.removeItem('access_token');
     localStorage.removeItem('user_data');
+    localStorage.removeItem('user_watchlist');
     
     setCurrentUser(null);
     setIsLoggedIn(false);
@@ -2994,6 +3334,8 @@ export default function App() {
       setPage("home");
       setPageHistory([]);
     }
+    
+    window.location.href = '/';
   }
 
   function handleRate(entry: RatedEntry) {
@@ -3001,9 +3343,9 @@ export default function App() {
     setRatedTitles((prev) => [entry, ...prev]);
   }
 
-  function handleEditRating(id: number, score: number, review: string, isSpoiler: boolean) {
+  function handleEditRating(id: number, score: number, review: string) {
     setRatedTitles((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, score, review, isSpoiler } : r))
+      prev.map((r) => (r.id === id ? { ...r, score, review } : r))
     );
   }
 
