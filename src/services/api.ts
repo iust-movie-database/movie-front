@@ -297,6 +297,7 @@ export interface WatchlistItem {
   title_id: number;
   t_type: string;
   age_rating: string;
+  score: number;
   name_fa: string;
   name_en: string;
   poster_url: string | null;
@@ -403,6 +404,7 @@ export function updateWatchlistInLocalStorage(
     
     const newItem: WatchlistItem = {
       title_id: titleId,
+      score: itemData?.score ?? 0,
       t_type: itemData?.t_type || 'M',
       age_rating: itemData?.age_rating || '',
       name_fa: itemData?.name_fa || '',

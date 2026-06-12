@@ -1397,7 +1397,6 @@ function MovieDetailPage({
     } else {
       const statusText = status === 'want_to_watch' ? 'می‌خواهم تماشا کنم' : 
                          status === 'watching' ? 'در حال تماشا' : 'تماشا شده';
-      alert(`"${movie.title}" با موفقیت به لیست ${statusText} اضافه شد`);
     }
   };
 
@@ -1481,7 +1480,6 @@ function MovieDetailPage({
                   updateWatchlistInLocalStorage(movie.id, null);
                   setSaved(false);
                   setCurrentStatus(null);
-                  alert(`"${movie.title}" از لیست تماشا حذف شد`);
                 } catch (error) {
                   console.error('Error removing from watchlist:', error);
                   alert('خطا در حذف از لیست تماشا');
@@ -1822,7 +1820,6 @@ function TVDetailPage({
     } else {
       const statusText = status === 'want_to_watch' ? 'می‌خواهم تماشا کنم' : 
                          status === 'watching' ? 'در حال تماشا' : 'تماشا شده';
-      alert(`"${tvShow.title}" با موفقیت به لیست ${statusText} اضافه شد`);
     }
   };
   
@@ -1927,7 +1924,6 @@ function TVDetailPage({
                   updateWatchlistInLocalStorage(tvShow.id, null);
                   setSaved(false);
                   setCurrentStatus(null);
-                  alert(`"${tvShow.title}" از لیست تماشا حذف شد`);
                 } catch (error) {
                   console.error('Error removing from watchlist:', error);
                   alert('خطا در حذف از لیست تماشا');
@@ -2740,14 +2736,12 @@ function ProfilePage({
   }
 
   function convertWatchlistToMovieData(item: WatchlistItem): MovieData {
-    const existingMovie = allContent.find(m => m.id === item.title_id);
-    if (existingMovie) return existingMovie;
     return {
       id: item.title_id,
       title: item.name_fa,
       originalTitle: item.name_en,
       img: item.poster_url || '/placeholder.jpg',
-      rating: 0,
+      rating: item.score,
       year: item.release_year,
       duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
                 item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
