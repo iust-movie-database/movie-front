@@ -75,12 +75,42 @@ import type {
   SearchParams
 } from "../services/api";
 
+const LOCAL_POSTER_MAP: Record<string, string> = {
+  'Breaking Bad': '/src/images/movie_tv/Breaking_Bad.jpg',
+  'Dark': '/src/images/movie_tv/Dark.jpg',
+  'Forrest Gump': '/src/images/movie_tv/Forrest_Gump.jpg',
+  'Game of Thrones': '/src/images/movie_tv/Game_of_Thrones.jpg',
+  'Gladiator': '/src/images/movie_tv/Gladiator.jpg',
+  'House of the Dragon': '/src/images/movie_tv/House_of_the_Dragon.jpg',
+  'Inception': '/src/images/movie_tv/Inception.jpg',
+  'Oppenheimer': '/src/images/movie_tv/Oppenheimer.jpg',
+  'Parasite': '/src/images/movie_tv/Parasite.jpg',
+  'Pulp Fiction': '/src/images/movie_tv/Pulp_Fiction.jpg',
+  'Stranger Things': '/src/images/movie_tv/Stranger_Things.jpg',
+  'Succession': '/src/images/movie_tv/Succession.jpg',
+  'The Crown': '/src/images/movie_tv/The_Crown.jpg',
+  'The Dark Knight': '/src/images/movie_tv/The_Dark_Knight.jpg',
+  'The Last of Us': '/src/images/movie_tv/The_Last_of_Us.jpg',
+  'The Mandalorian': '/src/images/movie_tv/The_Mandalorian.jpg',
+  'The Matrix': '/src/images/movie_tv/The_Matrix.jpg',
+  'The Social Network': '/src/images/movie_tv/The_Social_Network.jpg',
+  'Titanic': '/src/images/movie_tv/Titanic.jpg',
+  'Westworld': '/src/images/movie_tv/Westworld.jpg',
+};
+
+function getPosterUrl(posterUrl: string | null, nameEn: string): string {
+  if (LOCAL_POSTER_MAP[nameEn]) {
+    return LOCAL_POSTER_MAP[nameEn];
+  }
+  return posterUrl || '/placeholder.jpg';
+}
+
 function convertHeroToMovieData(hero: HeroTitle): MovieData {
   return {
     id: hero.title_id,
     title: hero.name_fa,
     originalTitle: hero.name_en,
-    img: hero.poster_url || '/placeholder.jpg',
+    img: getPosterUrl(hero.poster_url, hero.name_en),
     rating: hero.score,
     year: hero.release_year,
     duration: hero.duration_mins ? `${hero.duration_mins} دقیقه` : 
@@ -103,7 +133,7 @@ function convertTopMovieToMovieData(movie: TopMovie): MovieData {
     id: movie.title_id,
     title: movie.name_fa,
     originalTitle: movie.name_en,
-    img: movie.poster_url || '/placeholder.jpg',
+    img: getPosterUrl(movie.poster_url, movie.name_en),
     rating: movie.score,
     year: movie.release_year,
     duration: movie.duration_mins ? `${movie.duration_mins} دقیقه` : 'نامشخص',
@@ -125,7 +155,7 @@ function convertTopSeriesToMovieData(series: TopSeries): MovieData {
     id: series.title_id,
     title: series.name_fa,
     originalTitle: series.name_en,
-    img: series.poster_url || '/placeholder.jpg',
+    img: getPosterUrl(series.poster_url, series.name_en),
     rating: series.score,
     year: series.release_year,
     duration: series.total_episodes ? `${series.total_episodes} قسمت` : 'نامشخص',
@@ -147,7 +177,7 @@ function convertRecommendationToMovieData(rec: Recommendation): MovieData {
     id: rec.title_id,
     title: rec.name_fa,
     originalTitle: rec.name_en,
-    img: rec.poster_url || '/placeholder.jpg',
+    img: getPosterUrl(rec.poster_url, rec.name_en),
     rating: rec.score,
     year: rec.release_year,
     duration: rec.duration_mins ? `${rec.duration_mins} دقیقه` : 
@@ -179,7 +209,7 @@ function convertSearchResultToMovieData(item: SearchResult): MovieData {
     id: item.title_id,
     title: item.name_fa,
     originalTitle: item.name_en,
-    img: item.poster_url || '/placeholder.jpg',
+    img: getPosterUrl(item.poster_url, item.name_en),
     rating: item.score,
     year: item.release_year,
     duration: durationText,
@@ -871,7 +901,7 @@ function HomePage({
         [movie.id]: { saved: false, status: null }
       }));
     } catch (error) {
-      alert('خطا در حذف از لیست تماشا');
+
     }
   };
 
@@ -1511,7 +1541,6 @@ function MovieDetailPage({
     if (!success) {
       setSaved(previousSaved);
       setCurrentStatus(previousStatus);
-      alert('خطا در اتصال به سرور. تغییرات ذخیره نشد.');
     } else {
       const statusText = status === 'want_to_watch' ? 'می‌خواهم تماشا کنم' : 
                          status === 'watching' ? 'در حال تماشا' : 'تماشا شده';
@@ -1599,13 +1628,11 @@ function MovieDetailPage({
                   setSaved(false);
                   setCurrentStatus(null);
                 } catch (error) {
-                  console.error('Error removing from watchlist:', error);
-                  alert('خطا در حذف از لیست تماشا');
+                  console.error('Error removing from watchlist:', error);    
                 }
               }}
             />
             
-            {/* دکمه نوشتن نقد */}
             <button
               onClick={() => onOpenReviewModal(movie)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
@@ -1934,7 +1961,6 @@ function TVDetailPage({
     if (!success) {
       setSaved(previousSaved);
       setCurrentStatus(previousStatus);
-      alert('خطا در اتصال به سرور. تغییرات ذخیره نشد.');
     } else {
       const statusText = status === 'want_to_watch' ? 'می‌خواهم تماشا کنم' : 
                          status === 'watching' ? 'در حال تماشا' : 'تماشا شده';
@@ -2044,7 +2070,6 @@ function TVDetailPage({
                   setCurrentStatus(null);
                 } catch (error) {
                   console.error('Error removing from watchlist:', error);
-                  alert('خطا در حذف از لیست تماشا');
                 }
               }}
             />
@@ -2854,27 +2879,27 @@ function ProfilePage({
   }
 
   function convertWatchlistToMovieData(item: WatchlistItem): MovieData {
-    return {
-      id: item.title_id,
-      title: item.name_fa,
-      originalTitle: item.name_en,
-      img: item.poster_url || '/placeholder.jpg',
-      rating: item.score,
-      year: item.release_year,
-      duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
-                item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
-      age: item.age_rating,
-      summary: '',
-      genres: item.genres?.split(', ') || [],
-      type: item.t_type === 'S' ? 'TV' : 'Movie',
-      voteCount: 0,
-      similarMovieIds: [],
-      cast: [],
-      crew: [],
-      awards: [],
-      reviews: [],
-    };
-  }
+  return {
+    id: item.title_id,
+    title: item.name_fa,
+    originalTitle: item.name_en,
+    img: getPosterUrl(item.poster_url, item.name_en),  // استفاده از getPosterUrl
+    rating: item.score || 0,
+    year: item.release_year,
+    duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
+              item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
+    age: item.age_rating || 'PG-13',
+    summary: '',
+    genres: item.genres?.split(', ') || [],
+    type: item.t_type === 'S' ? 'TV' : 'Movie',
+    voteCount: 0,
+    similarMovieIds: [],
+    cast: [],
+    crew: [],
+    awards: [],
+    reviews: [],
+  };
+}
 
   function normalizeStatus(status: string): WatchlistStatus {
     if (!status) return 'want_to_watch';
@@ -2966,7 +2991,6 @@ function ProfilePage({
       onEditRating(editingId, editScore, editComment);
       setEditingId(null);
     } catch (error) {
-      alert('خطا در به روزرسانی امتیاز');
     }
   }
 
@@ -2983,7 +3007,6 @@ function ProfilePage({
         const maxPage = Math.ceil(newTotal / REVIEWS_PER_PAGE) || 1;
         if (reviewsPage > maxPage) setReviewsPage(maxPage);
       } catch (error) {
-        alert('خطا در حذف امتیاز');
       }
     }
   }
@@ -3312,16 +3335,35 @@ function ProfilePage({
           <>
             <div className="space-y-4 mb-8">
               {paginatedReviews.map((rating) => {
-                const movieData = allContent.find(m => m.id === rating.title_id);
+                const movieData: MovieData = {
+                  id: rating.title_id,
+                  title: rating.title_name_fa,
+                  originalTitle: rating.title_name_en || '',
+                  img: getPosterUrl(rating.poster_url || null, rating.title_name_en || rating.title_name_fa),
+                  rating: rating.rating_score,
+                  year: 0,
+                  duration: '',
+                  age: '',
+                  summary: '',
+                  genres: [],
+                  type: rating.t_type === 'S' ? 'TV' : 'Movie',
+                  voteCount: 0,
+                  similarMovieIds: [],
+                  cast: [],
+                  crew: [],
+                  awards: [],
+                  reviews: [],
+                };
+                
                 return (
                   <div key={rating.title_id} className="group bg-gradient-to-r from-white/5 to-white/0 rounded-2xl p-5 border border-white/8 hover:border-white/15 hover:bg-white/5 transition-all duration-300">
                     <div className="flex gap-5">
                       <img
-                        src={rating.poster_url || '/placeholder.jpg'}
+                        src={getPosterUrl(rating.poster_url || null, rating.title_name_en || rating.title_name_fa)}
                         alt={rating.title_name_fa}
                         className="w-16 h-24 object-cover rounded-xl flex-shrink-0 border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => {
-                          if (movieData) setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
+                          setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
                         }}
                       />
                       <div className="flex-1 min-w-0">
@@ -3329,7 +3371,7 @@ function ProfilePage({
                           <div>
                             <h3
                               onClick={() => {
-                                if (movieData) setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
+                                setPage(rating.t_type === 'S' ? "tv" : "movie", movieData);
                               }}
                               className="text-foreground font-semibold text-base hover:text-primary transition-colors cursor-pointer"
                             >
@@ -3865,7 +3907,6 @@ export default function App() {
       setCurrentReviewTitle(null);
     } catch (error) {
       console.error('Error saving review:', error);
-      alert('خطا در ذخیره نقد. لطفاً دوباره تلاش کنید.');
     }
   }
 
