@@ -327,7 +327,7 @@ export interface SearchResult {
   duration_mins: number | null;
   total_seasons: number | null;
   total_episodes: number | null;
-  age_rating?: string;  
+  age_rating: string;  
   is_saved: boolean;
   total_count: number;
 }
@@ -760,18 +760,45 @@ export async function getPopularGenres(limit: number = 5): Promise<PopularGenre[
   return handleResponse<PopularGenre[]>(response);
 }
 
-export async function getRecommendations(limit: number = 5, token?: string): Promise<Recommendation[]> {
-  const headers: HeadersInit = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  } else {
-    const autoToken = getToken();
-    if (autoToken) {
-      headers['Authorization'] = `Bearer ${autoToken}`;
-    }
+export async function getRecommendations(limit: number = 5): Promise<Recommendation[]> {
+  const token = getToken();
+  
+  console.log('🔑 getRecommendations - Token exists:', !!token);
+  
+  if (!token) {
+    console.log('❌ No token found, returning empty array');
+    return [];
   }
-  const response = await fetch(`${API_BASE_URL}/homepage/recommendations?limit=${limit}`, { headers });
-  return handleResponse<Recommendation[]>(response);
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/homepage/recommendations?limit=${limit}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    console.log('📡 Recommendations response status:', response.status);
+    
+    if (response.status === 401) {
+      console.log('🔐 Token invalid or expired - clearing storage');
+      removeToken();
+      localStorage.removeItem('user_data');
+      return [];
+    }
+    
+    if (!response.ok) {
+      console.log(`❌ Recommendations API error: ${response.status}`);
+      return [];
+    }
+    
+    const data = await handleResponse<Recommendation[]>(response);
+    console.log(`✅ Recommendations received: ${data.length} items`);
+    return data;
+  } catch (error) {
+    console.error('❌ Failed to fetch recommendations:', error);
+    return [];
+  }
 }
 
 export async function getTopMovies(limit: number = 5): Promise<TopMovie[]> {

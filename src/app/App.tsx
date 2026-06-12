@@ -166,6 +166,15 @@ function convertRecommendationToMovieData(rec: Recommendation): MovieData {
 }
 
 function convertSearchResultToMovieData(item: SearchResult): MovieData {
+  let durationText = 'نامشخص';
+  if (item.duration_mins) {
+    durationText = `${item.duration_mins} دقیقه`;
+  } else if (item.total_seasons) {
+    durationText = `${item.total_seasons} فصل`;
+  } else if (item.total_episodes) {
+    durationText = `${item.total_episodes} قسمت`;
+  }
+  
   return {
     id: item.title_id,
     title: item.name_fa,
@@ -173,9 +182,8 @@ function convertSearchResultToMovieData(item: SearchResult): MovieData {
     img: item.poster_url || '/placeholder.jpg',
     rating: item.score,
     year: item.release_year,
-    duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
-              item.total_seasons ? `${item.total_seasons} فصل` : 'نامشخص',
-    age: item.age_rating || 'نامشخص',
+    duration: durationText,
+    age: item.age_rating || 'PG-13',  
     summary: '',
     genres: item.genres.split(', '),
     type: item.t_type === 'S' ? 'TV' : 'Movie',
@@ -681,6 +689,36 @@ function HomePage({
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // ریکامندیشن‌ها را جداگانه fetch کن
+  useEffect(() => {
+    async function fetchRecommendations() {
+      if (!isLoggedIn) {
+        console.log('👤 User not logged in, skipping recommendations');
+        setRecommendations([]);
+        return;
+      }
+      
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        console.log('⚠️ User logged in but no token found');
+        setRecommendations([]);
+        return;
+      }
+      
+      try {
+        console.log('🔄 Fetching recommendations...');
+        const recs = await getRecommendations(5);
+        console.log(`📺 Recommendations received: ${recs.length} items`);
+        setRecommendations(recs);
+      } catch (err) {
+        console.error('❌ Recommendations error:', err);
+        setRecommendations([]);
+      }
+    }
+    
+    fetchRecommendations();
+  }, [isLoggedIn]); // فقط وقتی isLoggedIn تغییر کند اجرا می‌شود
+
   useEffect(() => {
     async function fetchHomepageData() {
       setIsLoading(true);
@@ -1097,6 +1135,20 @@ function HomePage({
                       </div>
                     );
                   })}
+                </div>
+              </section>
+            )}
+
+            {/* اگر کاربر لاگین است ولی ریکامندیشنی وجود ندارد */}
+            {isLoggedIn && recommendations.length === 0 && !isLoading && (
+              <section>
+                <SectionHeader title={t.home.recommendedForYou} />
+                <div className="text-center py-12 bg-gradient-to-br from-white/5 to-white/0 rounded-2xl border border-white/8">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+                    <Star size={28} className="text-white/30" />
+                  </div>
+                  <p className="text-white/40 text-sm mb-1">هنوز ریکامندیشنی وجود ندارد</p>
+                  <p className="text-white/25 text-xs">با امتیاز دادن و افزودن فیلم‌ها به لیست تماشا، پیشنهادات شخصی‌سازی شده دریافت کنید</p>
                 </div>
               </section>
             )}
@@ -2147,6 +2199,15 @@ function BrowsePage({
   const [isSearching, setIsSearching] = useState(false);
   const [totalResults, setTotalResults] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
+  const [selectedAgeRatings, setSelectedAgeRatings] = useState<string[]>([]);
+  const [showAgeDropdown, setShowAgeDropdown] = useState(false);
+  const ageRatings = ["G", "PG", "PG-13", "R", "TV-14", "TV-MA", "TV-Y", "TV-Y7"];
+  const toggleAgeRating = (age: string) => {
+    setSelectedAgeRatings(prev =>
+      prev.includes(age) ? prev.filter(a => a !== age) : [...prev, age]
+    );
+    setCurrentPage(1);
+  };
 
   const allGenres = ["اکشن", "درام", "علمی-تخیلی", "ترسناک", "کمدی", "فانتزی", "جنایی", "تاریخی", "عاشقانه", "جنگی", "هیجان‌انگیز", "ماجراجویی", "معمایی", "خانوادگی"];
   
@@ -3465,6 +3526,10 @@ export default function App() {
       console.log('Watchlist synced:', watchlist.length, 'items');
     } catch (error) {
       console.error('Failed to sync watchlist:', error);
+    }
+ 
+    if (page === "home") {
+      window.location.reload();
     }
   }
 
