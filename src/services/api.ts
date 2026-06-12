@@ -615,14 +615,19 @@ export async function updateProfile(data: {
   return handleResponse<{ success: boolean; message: string }>(response);
 }
 
-export async function deleteProfile(password?: string): Promise<{ success: boolean; message: string }> {
-  const response = await fetch(`${API_BASE_URL}/profile/`, {
+export async function deleteProfile(password: string): Promise<{ success: boolean; message: string }> {
+  const token = getToken();
+  
+  const response = await fetch(`${API_BASE_URL}/profile`, {
     method: 'DELETE',
     headers: {
-      ...getAuthHeaders(),
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ password: password || '' }),
+    body: JSON.stringify({ password: password }),
   });
+  
+  console.log('Response status:', response.status);
   return handleResponse<{ success: boolean; message: string }>(response);
 }
 
