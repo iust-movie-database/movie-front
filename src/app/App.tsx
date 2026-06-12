@@ -1943,7 +1943,7 @@ function MovieDetailPage({
                   id: item.title_id,
                   title: item.name_fa,
                   originalTitle: item.name_en,
-                  img: item.poster_url || '/placeholder.jpg',
+                  img: getPosterUrl(item.poster_url, item.name_en), // <-- تغییر این خط
                   rating: item.score,
                   year: item.release_year,
                   duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
@@ -2447,7 +2447,7 @@ function TVDetailPage({
                   id: item.title_id,
                   title: item.name_fa,
                   originalTitle: item.name_en,
-                  img: item.poster_url || '/placeholder.jpg',
+                  img: getPosterUrl(item.poster_url, item.name_en), // <-- تغییر این خط
                   rating: item.score,
                   year: item.release_year,
                   duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
