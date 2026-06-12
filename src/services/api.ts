@@ -592,11 +592,13 @@ export async function getUserProfile(): Promise<UserProfile> {
 }
 
 export async function updateProfile(data: { 
-  username?: string; 
-  password?: string;
-  photo_url?: string;
-}) {
-  const response = await fetch(`${API_BASE_URL}/profile/`, {
+  current_password?: string | null;
+  username?: string | null;
+  email?: string | null;
+  photo_url?: string | null;
+  new_password?: string | null;
+}): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/profile/profile`, {
     method: 'PUT',
     headers: {
       ...getAuthHeaders(),
@@ -618,7 +620,6 @@ export async function deleteProfile(password?: string): Promise<{ success: boole
     method: 'DELETE',
     headers: {
       ...getAuthHeaders(),
-      'Content-Type': 'application/json',
     },
     body: JSON.stringify({ password: password || '' }),
   });

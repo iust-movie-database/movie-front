@@ -2726,6 +2726,13 @@ function ProfilePage({
 
   const [editUsername, setEditUsername] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [generalError, setGeneralError] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   function getAvatarInitials(username: string) {
     const parts = username.split(/[^a-zA-Z0-9]/);
@@ -2909,8 +2916,9 @@ function ProfilePage({
         <button
           onClick={() => { 
             setEditUsername(profileUsername); 
-            setEditEmail(profileEmail); 
-            setEditPhotoUrl(profilePhotoUrl || "");
+            setEditEmail(profileEmail);
+            setEditPhotoUrl(profilePhotoUrl || ""); 
+            setCurrentPassword("");
             setEditPassword("");
             setShowEditProfile(true); 
           }}
@@ -3279,38 +3287,285 @@ function ProfilePage({
         )}
       </section>
 
-      {/* Edit Profile Modal - بدون تغییر */}
+      {/* Edit Profile Modal */}
       {showEditProfile && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setShowEditProfile(false)}>
-          <div className="bg-card border border-white/15 dark:border-white/15 light:border-black/15 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-white/15 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white dark:text-white light:text-black" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>{t.editProfile.title}</h2>
-              <button onClick={() => setShowEditProfile(false)} className="text-white/40 dark:text-white/40 light:text-black/40 hover:text-white dark:hover:text-white light:hover:text-black transition-colors"><X size={20} /></button>
+              <h2 className="text-2xl font-bold text-white" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>ویرایش پروفایل</h2>
+              <button onClick={() => setShowEditProfile(false)} className="text-white/40 hover:text-white transition-colors"><X size={20} /></button>
             </div>
+            
             <div className="space-y-5">
+              {/* Username */}
               <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">{t.editProfile.username}</label>
-                <input type="text" value={editUsername} onChange={(e) => setEditUsername(e.target.value)} className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
+                <label className="block text-white/60 text-sm mb-2">نام کاربری</label>
+                <input 
+                  type="text" 
+                  value={editUsername} 
+                  onChange={(e) => setEditUsername(e.target.value)} 
+                  className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" 
+                />
               </div>
+              
+              {/* Email */}
               <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">{t.editProfile.email}</label>
-                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
+                <label className="block text-white/60 text-sm mb-2">ایمیل</label>
+                <input 
+                  type="email" 
+                  value={editEmail} 
+                  onChange={(e) => setEditEmail(e.target.value)} 
+                  className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" 
+                />
               </div>
+              
+              {/* Photo URL */}
               <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">آدرس عکس پروفایل</label>
-                <input type="url" value={editPhotoUrl} onChange={(e) => setEditPhotoUrl(e.target.value)} placeholder="https://example.com/photo.jpg" className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
+                <label className="block text-white/60 text-sm mb-2">آدرس عکس پروفایل</label>
+                <input 
+                  type="url" 
+                  value={editPhotoUrl} 
+                  onChange={(e) => setEditPhotoUrl(e.target.value)} 
+                  placeholder="https://example.com/photo.jpg" 
+                  className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" 
+                />
               </div>
+              
+              {/* Current Password */}
               <div>
-                <label className="block text-white/60 dark:text-white/60 light:text-black/60 text-sm mb-2">رمز عبور جدید (اختیاری)</label>
-                <input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="رمز عبور جدید" className="w-full bg-background border border-white/10 dark:border-white/10 light:border-black/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" />
+                <label className="block text-white/60 text-sm mb-2">رمز عبور فعلی <span className="text-red-400 text-xs">(برای تغییر رمز الزامی است)</span></label>
+                <input 
+                  type="password" 
+                  value={currentPassword} 
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    setPasswordError(""); // Clear error when user types
+                  }} 
+                  placeholder="رمز عبور فعلی را وارد کنید" 
+                  className={`w-full bg-background border rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors ${
+                    passwordError ? "border-red-500 border-2" : "border-white/10"
+                  }`}
+                />
+                {passwordError && (
+                  <p className="text-red-400 text-xs mt-1">{passwordError}</p>
+                )}
               </div>
+              
+              {/* New Password */}
+              <div>
+                <label className="block text-white/60 text-sm mb-2">رمز عبور جدید (اختیاری)</label>
+                <input 
+                  type="password" 
+                  value={editPassword} 
+                  onChange={(e) => setEditPassword(e.target.value)} 
+                  placeholder="رمز عبور جدید" 
+                  className="w-full bg-background border border-white/10 rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors" 
+                />
+              </div>
+              
+              {/* Delete Account Section */}
               <div className="pt-4 border-t border-white/10">
-                <button onClick={async () => { if (window.confirm('آیا از حذف حساب کاربری خود اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) { try { await deleteProfile(); localStorage.removeItem('access_token'); localStorage.removeItem('user_data'); localStorage.removeItem('user_watchlist'); setPage("home"); window.location.reload(); } catch (error) { alert('خطا در حذف حساب کاربری'); } } }} className="w-full px-6 py-3 bg-red-600/20 border border-red-500/50 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-600/30 transition-all">حذف حساب کاربری</button>
-                <p className="text-white/30 text-xs text-center mt-2">این عمل تمام اطلاعات شما را برای همیشه حذف خواهد کرد</p>
+                <button 
+                  onClick={() => setShowDeleteModal(true)} 
+                  className="w-full px-6 py-3 bg-red-600/20 border border-red-500/50 text-red-400 rounded-lg text-sm font-semibold hover:bg-red-600/30 transition-all"
+                >
+                  حذف حساب کاربری
+                </button>
+                <p className="text-white/30 text-xs text-center mt-2">برای حذف حساب، رمز عبور خود را وارد کنید</p>
               </div>
+              
+              {/* Buttons */}
+              {generalError && (
+                <p className="text-red-400 text-sm text-center py-2">{generalError}</p>
+              )}
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowEditProfile(false)} className="flex-1 px-6 py-3 bg-white/8 dark:bg-white/8 light:bg-black/8 border border-white/15 dark:border-white/15 light:border-black/15 text-white dark:text-white light:text-black rounded-lg text-sm font-medium hover:bg-white/12 dark:hover:bg-white/12 light:hover:bg-black/12 transition-all">{t.editProfile.cancel}</button>
-                <button onClick={async () => { try { const updateData: { username?: string; password?: string; photo_url?: string; } = {}; if (editUsername.trim() && editUsername !== profileUsername) updateData.username = editUsername.trim(); if (editPassword.trim()) updateData.password = editPassword.trim(); if (editPhotoUrl.trim() && editPhotoUrl !== profilePhotoUrl) updateData.photo_url = editPhotoUrl.trim(); if (Object.keys(updateData).length > 0) { await updateProfile(updateData); if (updateData.username) setProfileUsername(updateData.username); if (updateData.photo_url) setProfilePhotoUrl(updateData.photo_url); const currentUser = JSON.parse(localStorage.getItem('user_data') || '{}'); const updatedUser = { ...currentUser, ...updateData }; localStorage.setItem('user_data', JSON.stringify(updatedUser)); alert('پروفایل با موفقیت به روزرسانی شد'); } else { alert('هیچ تغییری اعمال نشده است'); } setShowEditProfile(false); setEditPassword(""); setEditPhotoUrl(""); } catch (error) { alert('خطا در به روزرسانی پروفایل'); } }} className="flex-1 px-6 py-3 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent active:bg-primary/90 transition-all shadow-lg shadow-[#E50914]/20 hover:shadow-[#E50914]/40">{t.editProfile.saveChanges}</button>
+                <button 
+                  onClick={() => setShowEditProfile(false)} 
+                  className="flex-1 px-6 py-3 bg-white/8 border border-white/15 text-white rounded-lg text-sm font-medium hover:bg-white/12 transition-all"
+                >
+                  انصراف
+                </button>
+                
+                <button 
+                  onClick={async () => { 
+                    try { 
+                      // Clear previous errors
+                      setPasswordError("");
+                      setGeneralError("");
+                      
+                      // Check if trying to change password without current password
+                      if (editPassword.trim() && !currentPassword.trim()) {
+                        setPasswordError("برای تغییر رمز عبور، رمز عبور فعلی الزامی است");
+                        return;
+                      }
+                      
+                      // Prepare update data with all fields
+                      const updateData = {
+                        current_password: currentPassword.trim() || null,
+                        username: (editUsername.trim() && editUsername !== profileUsername) ? editUsername.trim() : null,
+                        email: (editEmail.trim() && editEmail !== profileEmail) ? editEmail.trim() : null,
+                        photo_url: (editPhotoUrl.trim() && editPhotoUrl !== profilePhotoUrl) ? editPhotoUrl.trim() : null,
+                        new_password: editPassword.trim() || null
+                      };
+                      
+                      // Only proceed if there's at least one field to update (not all null)
+                      const hasChanges = Object.values(updateData).some(value => value !== null);
+                      if (!hasChanges) {
+                        setGeneralError("هیچ تغییری اعمال نشده است");
+                        return;
+                      }
+                      
+                      await updateProfile(updateData); 
+                      
+                      // Update local states if changed
+                      if (updateData.username) setProfileUsername(updateData.username);
+                      if (updateData.email) setProfileEmail(updateData.email);
+                      if (updateData.photo_url) setProfilePhotoUrl(updateData.photo_url);
+                      
+                      // Update localStorage
+                      const currentUser = JSON.parse(localStorage.getItem('user_data') || '{}'); 
+                      const updatedUser = { 
+                        ...currentUser, 
+                        ...(updateData.username && { username: updateData.username }),
+                        ...(updateData.email && { email: updateData.email }),
+                        ...(updateData.photo_url && { photo_url: updateData.photo_url })
+                      }; 
+                      localStorage.setItem('user_data', JSON.stringify(updatedUser)); 
+                      
+                      // Success - close modal and reset
+                      setShowEditProfile(false); 
+                      setEditPassword(""); 
+                      setEditPhotoUrl("");
+                      setCurrentPassword("");
+                      setPasswordError("");
+                      setGeneralError("");
+                      setEditEmail("");
+                      setEditUsername("");
+                      
+                    } catch (error: any) { 
+                      console.error('Update error:', error);
+                      
+                      // Try to get the actual error message
+                      let errorMessage = "خطا در به روزرسانی پروفایل";
+                      
+                      if (error?.message && typeof error.message === 'string') {
+                        errorMessage = error.message;
+                      } else if (error?.toString && error.toString() !== '[object Object]') {
+                        errorMessage = error.toString();
+                      }
+                      
+                      // Check if it's a password error
+                      if (errorMessage.includes("422") || 
+                          errorMessage.includes("password") || 
+                          errorMessage.includes("رمز") ||
+                          errorMessage.includes("current")) {
+                        setPasswordError("رمز عبور فعلی اشتباه است");
+                      } else {
+                        setGeneralError(errorMessage);
+                      }
+                    }
+                  }} 
+                  className="flex-1 px-6 py-3 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-accent transition-all shadow-lg shadow-primary/20"
+                >
+                  ذخیره تغییرات
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-8" onClick={() => {
+          setShowDeleteModal(false);
+          setDeletePassword("");
+          setDeleteError("");
+        }}>
+          <div className="bg-card border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white" style={{ fontFamily: "'Vazirmatn', sans-serif" }}>حذف حساب کاربری</h2>
+              <button onClick={() => {
+                setShowDeleteModal(false);
+                setDeletePassword("");
+                setDeleteError("");
+              }} className="text-white/40 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-5">
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-600/20 flex items-center justify-center">
+                  <div className="text-red-500 text-2xl font-bold">!</div>
+                </div>
+                <p className="text-white/80 text-sm mb-2">
+                  آیا از حذف حساب کاربری خود اطمینان دارید؟
+                </p>
+                <p className="text-white/40 text-xs">
+                  این عمل غیرقابل بازگشت است و تمام اطلاعات شما برای همیشه حذف خواهد شد.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-white/60 text-sm mb-2">رمز عبور خود را وارد کنید</label>
+                <input 
+                  type="password" 
+                  value={deletePassword} 
+                  onChange={(e) => {
+                    setDeletePassword(e.target.value);
+                    setDeleteError("");
+                  }} 
+                  placeholder="رمز عبور فعلی" 
+                  className={`w-full bg-background border rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors ${
+                    deleteError ? "border-red-500 border-2" : "border-white/10"
+                  }`}
+                />
+                {deleteError && (
+                  <p className="text-red-400 text-xs mt-1">{deleteError}</p>
+                )}
+              </div>
+              
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeletePassword("");
+                    setDeleteError("");
+                  }} 
+                  className="flex-1 px-6 py-3 bg-white/8 border border-white/15 text-white rounded-lg text-sm font-medium hover:bg-white/12 transition-all"
+                >
+                  انصراف
+                </button>
+                
+                <button 
+                  onClick={async () => { 
+                    if (!deletePassword.trim()) {
+                      setDeleteError("لطفاً رمز عبور خود را وارد کنید");
+                      return;
+                    }
+                    
+                    setIsDeleting(true);
+                    setDeleteError("");
+                    
+                    try { 
+                      await deleteProfile(deletePassword); 
+                      localStorage.removeItem('access_token'); 
+                      localStorage.removeItem('user_data'); 
+                      setPage("home"); 
+                      window.location.reload(); 
+                    } catch (error: any) { 
+                      console.error('Delete error:', error);
+                      setDeleteError("رمز عبور اشتباه است یا خطایی رخ داده است");
+                    } finally {
+                      setIsDeleting(false);
+                    } 
+                  }} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? "در حال حذف..." : "تأیید و حذف"}
+                </button>
               </div>
             </div>
           </div>
