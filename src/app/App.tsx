@@ -679,7 +679,9 @@ function HomePage({
   const [heroIndex, setHeroIndex] = useState(0);
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
-  
+  const [heroSavedStatus, setHeroSavedStatus] = useState<Record<number, { saved: boolean; status: WatchlistStatus | null }>>({});
+  const [showWatchlistModal, setShowWatchlistModal] = useState(false);
+  const [pendingHeroItem, setPendingHeroItem] = useState<MovieData | null>(null);
   const [heroData, setHeroData] = useState<HeroTitle[]>([]);
   const [popularGenres, setPopularGenres] = useState<PopularGenre[]>([]);
   const [topMovies, setTopMovies] = useState<TopMovie[]>([]);
@@ -767,6 +769,32 @@ function HomePage({
   const hero = heroSlides[heroIndex] || heroSlides[0];
 
   useEffect(() => {
+    async function checkWatchlistStatus() {
+      if (!isLoggedIn || heroSlides.length === 0) return;
+      
+      try {
+        const watchlist = await getUserWatchlist(true);
+        const statusMap: Record<number, { saved: boolean; status: WatchlistStatus | null }> = {};
+        
+        heroSlides.forEach(slide => {
+          const found = watchlist.find(item => item.title_id === slide.id);
+          if (found) {
+            statusMap[slide.id] = { saved: true, status: found.status };
+          } else {
+            statusMap[slide.id] = { saved: false, status: null };
+          }
+        });
+        
+        setHeroSavedStatus(statusMap);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    }
+    
+    checkWatchlistStatus();
+  }, [isLoggedIn, heroSlides]);
+
+  useEffect(() => {
     if (isPaused || heroSlides.length === 0) return;
     const interval = setInterval(() => {
       setHeroIndex((prev) => (prev + 1) % heroSlides.length);
@@ -801,6 +829,52 @@ function HomePage({
     ...topSeries.map(convertTopSeriesToMovieData),
   ];
   
+  const handleSaveClick = (movie: MovieData) => {
+    if (!isLoggedIn) {
+      onAuthRequest();
+      return;
+    }
+    setPendingHeroItem(movie);
+    setShowWatchlistModal(true);
+  };
+
+  const handleSelectList = async (status: WatchlistStatus) => {
+    if (!pendingHeroItem || !status || !isLoggedIn) return;
+    
+    const isSaved = heroSavedStatus[pendingHeroItem.id]?.saved || false;
+    
+    setHeroSavedStatus(prev => ({
+      ...prev,
+      [pendingHeroItem.id]: { saved: true, status }
+    }));
+    setShowWatchlistModal(false);
+    
+    await syncWatchlistToServerAndLocal(pendingHeroItem.id, status, pendingHeroItem, isSaved);
+    setPendingHeroItem(null);
+  };
+
+  const handleRemoveFromWatchlist = async (movie: MovieData) => {
+    if (!isLoggedIn) {
+      onAuthRequest();
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      await fetch(`http://localhost:8000/saved/${movie.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      
+      setHeroSavedStatus(prev => ({
+        ...prev,
+        [movie.id]: { saved: false, status: null }
+      }));
+    } catch (error) {
+      alert('خطا در حذف از لیست تماشا');
+    }
+  };
+
   const filteredAll = filterContent(allContentFromAPI);
 
   function handleGenre(g: string) {
@@ -933,10 +1007,44 @@ function HomePage({
                   >
                     {t.detail.viewDetails}
                   </button>
-                  <button className="px-6 py-3.5 bg-white/10 border border-white/20 text-white rounded-xl font-semibold hover:bg-white/20 transition-all flex items-center gap-2">
-                    <Bookmark size={18} />
-                    {t.detail.save}
-                  </button>
+                  {(() => {
+                    const status = heroSavedStatus[hero.id];
+                    const isSaved = status?.saved || false;
+                    
+                    let buttonText = t.detail.save;
+                    let buttonIcon = <Bookmark size={18} />;
+                    
+                    if (isSaved && status?.status === 'want_to_watch') {
+                      buttonText = 'می‌خواهم تماشا کنم';
+                      buttonIcon = <BookmarkCheck size={18} />;
+                    } else if (isSaved && status?.status === 'watching') {
+                      buttonText = 'در حال تماشا';
+                      buttonIcon = <BookmarkCheck size={18} />;
+                    } else if (isSaved && status?.status === 'watched') {
+                      buttonText = 'تماشا شده';
+                      buttonIcon = <BookmarkCheck size={18} />;
+                    }
+                    
+                    return (
+                      <button
+                        onClick={() => {
+                          if (isSaved) {
+                            handleRemoveFromWatchlist(hero);
+                          } else {
+                            handleSaveClick(hero);
+                          }
+                        }}
+                        className={`px-6 py-3.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                          isSaved
+                            ? 'bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30'
+                            : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                        }`}
+                      >
+                        {buttonIcon}
+                        {buttonText}
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1243,6 +1351,16 @@ function HomePage({
           </>
         )}
       </div>
+      <WatchlistModal
+        isOpen={showWatchlistModal}
+        onClose={() => {
+          setShowWatchlistModal(false);
+          setPendingHeroItem(null);
+        }}
+        onSelect={handleSelectList}
+        currentStatus={pendingHeroItem ? heroSavedStatus[pendingHeroItem.id]?.status || null : null}
+        titleName={pendingHeroItem?.title || ''}
+      />
     </div>
   );
 }
