@@ -635,6 +635,25 @@ function DesignSystemPage() {
 }
 
 // ── Page 2: Homepage (با اتصال به API) ─────────────────────────────────────────
+function getGenreGradient(genreName: string): string {
+  const gradients: Record<string, string> = {
+    'اکشن': 'from-red-500 to-orange-500',
+    'درام': 'from-purple-500 to-pink-500',
+    'کمدی': 'from-yellow-500 to-amber-500',
+    'ترسناک': 'from-gray-700 to-gray-900',
+    'علمی-تخیلی': 'from-blue-500 to-purple-500',
+    'فانتزی': 'from-emerald-500 to-teal-500',
+    'عاشقانه': 'from-rose-500 to-pink-500',
+    'جنایی': 'from-gray-600 to-gray-800',
+    'تاریخی': 'from-amber-600 to-orange-600',
+    'هیجان‌انگیز': 'from-indigo-500 to-blue-500',
+    'ماجراجویی': 'from-green-500 to-emerald-500',
+    'معمایی': 'from-slate-600 to-gray-700',
+    'خانوادگی': 'from-cyan-500 to-blue-500',
+    'جنگی': 'from-red-700 to-red-900',
+  };
+  return gradients[genreName] || 'from-primary to-secondary';
+}
 
 function HomePage({
   setPage,
@@ -858,20 +877,11 @@ function HomePage({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {hero.genres.slice(0, 4).map((g) => {
-                    const IconComponent = genreIcons[g];
-                    return (
-                      <span
-                        key={g}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-br from-white/12 to-white/8 backdrop-blur-md border border-white/20 text-white/90 text-sm rounded-xl font-medium shadow-lg shadow-black/30 hover:from-primary/20 hover:to-accent/15 hover:border-primary/40 transition-all duration-300"
-                      >
-                        {IconComponent && (
-                          <IconComponent size={16} className="text-primary/90 drop-shadow-[0_0_6px_rgba(139,92,246,0.5)]" />
-                        )}
-                        {g}
-                      </span>
-                    );
-                  })}
+                  {hero.genres.slice(0, 4).map((g) => (
+                    <span key={g} className="px-4 py-1.5 bg-white/10 rounded-xl text-sm">
+                      {g}
+                    </span>
+                  ))}
                 </div>
 
                 <p className="text-white/80 text-base leading-relaxed max-w-xl line-clamp-3">
@@ -939,22 +949,109 @@ function HomePage({
               </button>
             )}
           </div>
-          <div className="flex gap-3 flex-wrap">
-            {popularGenres.map((genre) => (
-              <button
-                key={genre.genre_id}
-                onClick={() => handleGenre(genre.genre_name)}
-                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all border ${
-                  activeGenre === genre.genre_name
-                    ? "bg-primary border-primary text-white"
-                    : "bg-transparent border-white/20 text-white/70 hover:border-white/40 hover:text-white"
-                }`}
-              >
-                {genre.genre_name}
-                <span className="mr-2 text-xs opacity-60">({toPersianDigits(genre.title_count)})</span>
-              </button>
-            ))}
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-5">
+            {popularGenres.map((genre, index) => {
+              const isActive = activeGenre === genre.genre_name;
+              const GenreIcon = genreIcons[genre.genre_name];
+              
+              return (
+                <button
+                  key={genre.genre_id}
+                  onClick={() => handleGenre(genre.genre_name)}
+                  className={`
+                    group relative overflow-hidden rounded-2xl transition-all duration-500
+                    hover:scale-[1.03] hover:-translate-y-1
+                    ${isActive 
+                      ? 'shadow-2xl shadow-primary/40' 
+                      : 'hover:shadow-xl hover:shadow-primary/20'
+                    }
+                  `}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <div className={`
+                    absolute inset-0 transition-all duration-500
+                    ${isActive 
+                      ? 'bg-gradient-to-br from-primary via-purple-600 to-accent' 
+                      : 'bg-gradient-to-br from-white/8 to-white/2 backdrop-blur-sm'
+                    }
+                  `} />
+                  
+                  
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
+                    <div className="absolute -inset-full w-full h-full bg-gradient-to-r from-transparent via-white/15 to-transparent transform -skew-x-12 group-hover:translate-x-full transition-transform duration-1000" />
+                  </div>
+                  
+                  
+                  {!isActive && (
+                    <div className="absolute inset-0 rounded-2xl border border-white/10 group-hover:border-primary/50 transition-all duration-300" />
+                  )}
+                  
+                  
+                  {isActive && (
+                    <>
+                      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-primary to-purple-500 blur-xl opacity-50 animate-pulse" />
+                      <div className="absolute inset-0 rounded-2xl ring-2 ring-white/30 ring-offset-2 ring-offset-background" />
+                    </>
+                  )}
+                  
+                  <div className="relative z-10 text-center p-5">
+                    <div className={`
+                      mx-auto mb-4 w-16 h-16 rounded-2xl flex items-center justify-center 
+                      transition-all duration-500 transform
+                      ${isActive 
+                        ? 'bg-white/20 scale-110 shadow-lg shadow-black/20' 
+                        : 'bg-gradient-to-br from-white/15 to-white/5 group-hover:scale-110 group-hover:from-primary/30 group-hover:to-purple-600/30'
+                      }
+                    `}>
+                      <GenreIcon 
+                        className={`
+                          w-8 h-8 transition-all duration-300
+                          ${isActive ? 'text-white' : 'text-primary/80 group-hover:text-white'}
+                        `} 
+                        strokeWidth={1.6} 
+                      />
+                    </div>
+
+                    <h3 className={`
+                      text-base font-bold mb-1.5 tracking-tight transition-all duration-300
+                      ${isActive ? 'text-white' : 'text-foreground group-hover:text-primary'}
+                    `}>
+                      {genre.genre_name}
+                    </h3>
+
+                    <div className={`
+                      inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono
+                      transition-all duration-300 backdrop-blur-sm
+                      ${isActive 
+                        ? 'bg-white/20 text-white/90' 
+                        : 'bg-black/20 text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary'
+                      }
+                    `}>
+                      <span className="w-1 h-1 rounded-full bg-current opacity-60" />
+                      {toPersianDigits(genre.title_count)} عنوان
+                      <span className="w-1 h-1 rounded-full bg-current opacity-60" />
+                    </div>
+                  </div>
+                  
+                  <div className={`
+                    absolute bottom-0 left-0 h-1 rounded-b-2xl transition-all duration-500
+                    ${isActive 
+                      ? 'w-full bg-gradient-to-r from-white/50 to-white/10' 
+                      : 'w-0 group-hover:w-full bg-gradient-to-r from-primary to-purple-500'
+                    }
+                  `} />
+                  
+
+                  <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 rounded-tl-2xl transition-all duration-300 opacity-0 group-hover:opacity-100"
+                    style={{ borderColor: isActive ? 'rgba(255,255,255,0.3)' : 'var(--primary)' }} />
+                  <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 rounded-tr-2xl transition-all duration-300 opacity-0 group-hover:opacity-100"
+                    style={{ borderColor: isActive ? 'rgba(255,255,255,0.3)' : 'var(--primary)' }} />
+                </button>
+              );
+            })}
           </div>
+
           {isFiltering && (
             <p className="text-white/35 text-sm mt-4">
               {toPersianDigits(filteredAll.length)} {t.home.results}
@@ -1078,7 +1175,11 @@ function HomePage({
                           <h3 className="font-semibold text-foreground text-sm leading-tight mb-0.5 line-clamp-1">{movieData.title}</h3>
                           <p className="text-white/35 dark:text-white/35 light:text-black/40 text-[11px] leading-tight mb-1.5 line-clamp-1 font-light">{movieData.originalTitle}</p>
                           <div className="flex flex-wrap gap-1">
-                            {movieData.genres.slice(0, 2).map((g) => <span key={g} className="px-1.5 py-0.5 bg-white/8 dark:bg-white/8 light:bg-black/8 rounded text-white/50 dark:text-white/50 light:text-black/60 text-[10px]">{g}</span>)}
+                            {movieData.genres.slice(0, 2).map((g: string) => (
+                              <span key={g} className="px-1.5 py-0.5 bg-white/8 rounded text-white/50 text-[10px]">
+                                {g}
+                              </span>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -1279,7 +1380,7 @@ function MovieDetailPage({
         <div className="flex-1 pt-2">
           <div className="flex flex-wrap gap-2 mb-4">
             {movie.genres.map((g) => (
-              <GenrePill key={g} genre={g} onClick={() => goToBrowseWithQuery(g)} />
+              <GenrePill key={g} genre={g} onClick={() => goToBrowseWithQuery(g)} showIcon={false} />
             ))}
           </div>
           <h1
@@ -3466,6 +3567,14 @@ export default function App() {
           onAuthRequest={() => setAuthGateModal("login")}
           onOpenReviewModal={handleOpenReviewModal}
           userReviews={userReviews}
+        />
+      )}
+
+      {page === "browse" && (
+        <BrowsePage
+          setPage={navigate}
+          globalSearch={globalSearch}
+          setGlobalSearch={setGlobalSearch}
         />
       )}
 
