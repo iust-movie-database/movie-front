@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Routes, Route, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import {
   Star, Bookmark, BookmarkCheck, Search, ChevronLeft, ChevronRight,
-  ChevronDown, X, Edit2, Trash2, Calendar, Clock, Sun, Moon, Award, Filter, Mail, List
+  ChevronDown, X, Edit2, Trash2, Calendar, Clock, Sun, Moon, Award, Filter, Mail, List,
+  Check, Eye 
 } from "lucide-react";
 import { ReviewModal } from "./components/ReviewModal";
 import { translations as t, toPersianDigits, formatPersianNumber, genreIcons } from "../i18n/fa";
@@ -885,8 +886,6 @@ function HomePage({
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [heroSavedStatus, setHeroSavedStatus] = useState<Record<number, { saved: boolean; status: WatchlistStatus | null }>>({});
-  const [showWatchlistModal, setShowWatchlistModal] = useState(false);
-  const [pendingHeroItem, setPendingHeroItem] = useState<MovieData | null>(null);
   const [heroData, setHeroData] = useState<HeroTitle[]>([]);
   const [popularGenres, setPopularGenres] = useState<PopularGenre[]>([]);
   const [topMovies, setTopMovies] = useState<TopMovie[]>([]);
@@ -895,6 +894,19 @@ function HomePage({
   const [comingSoon, setComingSoon] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  
+  const [heroDropdownOpen, setHeroDropdownOpen] = useState<number | null>(null);
+  const heroDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (heroDropdownRef.current && !heroDropdownRef.current.contains(e.target as Node)) {
+        setHeroDropdownOpen(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     async function fetchRecommendations() {
@@ -1025,32 +1037,37 @@ function HomePage({
     ...topMovies.map(convertTopMovieToMovieData),
     ...topSeries.map(convertTopSeriesToMovieData),
   ];
-  
-  const handleSaveClick = (movie: MovieData) => {
+ 
+  const handleHeroSaveClick = (movie: MovieData) => {
     if (!isLoggedIn) {
       onAuthRequest();
       return;
     }
-    setPendingHeroItem(movie);
-    setShowWatchlistModal(true);
+    handleHeroSelectList(movie, "want_to_watch");
   };
 
-  const handleSelectList = async (status: WatchlistStatus) => {
-    if (!pendingHeroItem || !status || !isLoggedIn) return;
+  const handleHeroSelectList = async (movie: MovieData, status: WatchlistStatus) => {
+    if (!movie || !status || !isLoggedIn) return;
     
-    const isSaved = heroSavedStatus[pendingHeroItem.id]?.saved || false;
+    const currentStatus = heroSavedStatus[movie.id]?.status;
+    const isSaved = heroSavedStatus[movie.id]?.saved || false;
     
+    if (isSaved && currentStatus === status) {
+      setHeroDropdownOpen(null);
+      return;
+    }
+
     setHeroSavedStatus(prev => ({
       ...prev,
-      [pendingHeroItem.id]: { saved: true, status }
+      [movie.id]: { saved: true, status }
     }));
-    setShowWatchlistModal(false);
     
-    await syncWatchlistToServerAndLocal(pendingHeroItem.id, status, pendingHeroItem, isSaved);
-    setPendingHeroItem(null);
+    setHeroDropdownOpen(null);
+
+    await syncWatchlistToServerAndLocal(movie.id, status, movie, isSaved);
   };
 
-  const handleRemoveFromWatchlist = async (movie: MovieData) => {
+  const handleHeroRemoveFromWatchlist = async (movie: MovieData) => {
     if (!isLoggedIn) {
       onAuthRequest();
       return;
@@ -1067,8 +1084,9 @@ function HomePage({
         ...prev,
         [movie.id]: { saved: false, status: null }
       }));
+      setHeroDropdownOpen(null);
     } catch (error) {
-
+      console.error('Error removing from watchlist:', error);
     }
   };
 
@@ -1239,44 +1257,97 @@ function HomePage({
                     {t.detail.viewDetails}
                   </button>
                   
-                  {(() => {
-                    const status = heroSavedStatus[hero.id];
-                    const isSaved = status?.saved || false;
-                    
-                    let buttonText = t.detail.save;
-                    let buttonIcon = <Bookmark size={18} />;
-                    
-                    if (isSaved && status?.status === 'want_to_watch') {
-                      buttonText = 'می‌خواهم تماشا کنم';
-                      buttonIcon = <BookmarkCheck size={18} />;
-                    } else if (isSaved && status?.status === 'watching') {
-                      buttonText = 'در حال تماشا';
-                      buttonIcon = <BookmarkCheck size={18} />;
-                    } else if (isSaved && status?.status === 'watched') {
-                      buttonText = 'تماشا شده';
-                      buttonIcon = <BookmarkCheck size={18} />;
-                    }
-                    
-                    return (
-                      <button
-                        onClick={() => {
-                          if (isSaved) {
-                            handleRemoveFromWatchlist(hero);
-                          } else {
-                            handleSaveClick(hero);
-                          }
-                        }}
-                        className={`px-6 py-3.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
-                          isSaved
-                            ? 'bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30'
-                            : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
-                        }`}
-                      >
-                        {buttonIcon}
-                        {buttonText}
-                      </button>
-                    );
-                  })()}
+                  {/* دکمه Save هرو */}
+                  <div ref={heroDropdownRef} className="relative">
+                    {(() => {
+                      const status = heroSavedStatus[hero.id];
+                      const isSaved = status?.saved || false;
+                      const currentStatus = status?.status || null;
+                      
+                      let buttonText = t.detail.saveToWatchlist;
+                      let buttonIcon = <Bookmark size={18} />;
+                      
+                      if (isSaved && currentStatus === 'want_to_watch') {
+                        buttonText = t.profile.wantToWatch;
+                        buttonIcon = <BookmarkCheck size={18} />;
+                      } else if (isSaved && currentStatus === 'watching') {
+                        buttonText = t.profile.watching;
+                        buttonIcon = <BookmarkCheck size={18} />;
+                      } else if (isSaved && currentStatus === 'watched') {
+                        buttonText = t.profile.watched;
+                        buttonIcon = <BookmarkCheck size={18} />;
+                      }
+                      
+                      return (
+                        <>
+                          <button
+                            onClick={() => {
+                              setHeroDropdownOpen(heroDropdownOpen === hero.id ? null : hero.id);
+                            }}
+                            className={`px-8 py-3.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                              isSaved
+                                ? "bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30"
+                                : "bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                            }`}
+                          >
+                            {buttonIcon}
+                            {buttonText}
+                            <ChevronDown size={14} className={`transition-transform ${heroDropdownOpen === hero.id ? "rotate-180" : ""}`} />
+                          </button>
+                          
+                          {/* منو همیشه نمایش داده می‌شود - بدون شرط isSaved */}
+                          {heroDropdownOpen === hero.id && (
+                            <div className="absolute top-full mt-2 left-0 z-50 bg-card border border-white/15 rounded-xl shadow-2xl shadow-black/60 overflow-hidden min-w-[200px]">
+                              <button
+                                onClick={() => handleHeroSelectList(hero, "want_to_watch")}
+                                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-right transition-colors hover:bg-white/8 ${
+                                  currentStatus === "want_to_watch" ? "text-primary" : "text-foreground/80"
+                                }`}
+                              >
+                                <Clock size={14} />
+                                {t.profile.wantToWatch}
+                                {currentStatus === "want_to_watch" && <Check size={12} className="mr-auto text-primary" />}
+                              </button>
+                              <button
+                                onClick={() => handleHeroSelectList(hero, "watching")}
+                                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-right transition-colors hover:bg-white/8 ${
+                                  currentStatus === "watching" ? "text-primary" : "text-foreground/80"
+                                }`}
+                              >
+                                <Eye size={14} />
+                                {t.profile.watching}
+                                {currentStatus === "watching" && <Check size={12} className="mr-auto text-primary" />}
+                              </button>
+                              <button
+                                onClick={() => handleHeroSelectList(hero, "watched")}
+                                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-right transition-colors hover:bg-white/8 ${
+                                  currentStatus === "watched" ? "text-primary" : "text-foreground/80"
+                                }`}
+                              >
+                                <Check size={14} />
+                                {t.profile.watched}
+                                {currentStatus === "watched" && <Check size={12} className="mr-auto text-primary" />}
+                              </button>
+                              
+                              {/* فقط اگر قبلاً ذخیره شده بود، گزینه حذف نمایش داده شود */}
+                              {isSaved && (
+                                <>
+                                  <div className="border-t border-white/8 mx-2" />
+                                  <button
+                                    onClick={() => handleHeroRemoveFromWatchlist(hero)}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-right text-white/40 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                                  >
+                                    <X size={14} />
+                                    {t.profile.unsave}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1355,16 +1426,13 @@ function HomePage({
                     }
                   `} />
                   
-                  
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
                     <div className="absolute -inset-full w-full h-full bg-gradient-to-r from-transparent via-white/15 to-transparent transform -skew-x-12 group-hover:translate-x-full transition-transform duration-1000" />
                   </div>
                   
-                  
                   {!isActive && (
                     <div className="absolute inset-0 rounded-2xl border border-white/10 group-hover:border-primary/50 transition-all duration-300" />
                   )}
-                  
                   
                   {isActive && (
                     <>
@@ -1420,7 +1488,6 @@ function HomePage({
                     }
                   `} />
                   
-
                   <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 rounded-tl-2xl transition-all duration-300 opacity-0 group-hover:opacity-100"
                     style={{ borderColor: isActive ? 'rgba(255,255,255,0.3)' : 'var(--primary)' }} />
                   <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 rounded-tr-2xl transition-all duration-300 opacity-0 group-hover:opacity-100"
@@ -1582,20 +1649,9 @@ function HomePage({
           </>
         )}
       </div>
-      <WatchlistModal
-        isOpen={showWatchlistModal}
-        onClose={() => {
-          setShowWatchlistModal(false);
-          setPendingHeroItem(null);
-        }}
-        onSelect={handleSelectList}
-        currentStatus={pendingHeroItem ? heroSavedStatus[pendingHeroItem.id]?.status || null : null}
-        titleName={pendingHeroItem?.title || ''}
-      />
     </div>
   );
 }
-
 // ── Page 3: Movie Detail (با اتصال به API و پشتیبانی از localStorage) ─────────────────
 
 function MovieDetailPage({
@@ -1635,7 +1691,6 @@ function MovieDetailPage({
   const existingRating = ratedTitles.find((r) => r.id === movie.id);
   const myReview = userReviews.find((r) => r.id === movie.id);
 
-  // Check watchlist status on load
   useEffect(() => {
     async function checkWatchlistStatus() {
       if (!isLoggedIn) {
@@ -1932,7 +1987,7 @@ function MovieDetailPage({
                   id: item.title_id,
                   title: item.name_fa,
                   originalTitle: item.name_en,
-                  img: getPosterUrl(item.poster_url, item.name_en), // <-- تغییر این خط
+                  img: getPosterUrl(item.poster_url, item.name_en), 
                   rating: item.score,
                   year: item.release_year,
                   duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
@@ -2039,7 +2094,6 @@ function TVDetailPage({
   const existingRating = ratedTitles.find((r) => r.id === tvShow.id);
   const myReview = userReviews.find((r) => r.id === tvShow.id);
 
-  // Check watchlist status on load
   useEffect(() => {
     async function checkWatchlistStatus() {
       if (!isLoggedIn) {
@@ -2248,15 +2302,15 @@ function TVDetailPage({
                 try {
                   const token = localStorage.getItem('access_token');
                   if (!token) throw new Error('No token');
-                  await fetch(`http://localhost:8000/saved/${tvShow.id}`, {
+                  await fetch(`http://localhost:8000/saved/${movie.id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` },
                   });
-                  updateWatchlistInLocalStorage(tvShow.id, null);
+                  updateWatchlistInLocalStorage(movie.id, null);
                   setSaved(false);
                   setCurrentStatus(null);
                 } catch (error) {
-                  console.error('Error removing from watchlist:', error);
+                  console.error('Error removing from watchlist:', error);    
                 }
               }}
             />
