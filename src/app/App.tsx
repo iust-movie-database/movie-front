@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Routes, Route, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import {
   Star, Bookmark, BookmarkCheck, Search, ChevronLeft, ChevronRight,
   ChevronDown, X, Edit2, Trash2, Calendar, Clock, Sun, Moon, Award, Filter, Mail, List
@@ -898,25 +899,20 @@ function HomePage({
   useEffect(() => {
     async function fetchRecommendations() {
       if (!isLoggedIn) {
-        console.log('👤 User not logged in, skipping recommendations');
         setRecommendations([]);
         return;
       }
       
       const token = localStorage.getItem('access_token');
       if (!token) {
-        console.log('⚠️ User logged in but no token found');
         setRecommendations([]);
         return;
       }
       
       try {
-        console.log('🔄 Fetching recommendations...');
         const recs = await getRecommendations(5);
-        console.log(`📺 Recommendations received: ${recs.length} items`);
         setRecommendations(recs);
       } catch (err) {
-        console.error('❌ Recommendations error:', err);
         setRecommendations([]);
       }
     }
@@ -945,7 +941,6 @@ function HomePage({
           const coming = await getComingSoon(5);
           setComingSoon(coming);
         } catch (err) {
-          console.log('Coming soon endpoint not available');
           setComingSoon([]);
         }
         
@@ -954,7 +949,6 @@ function HomePage({
             const recs = await getRecommendations(5);
             setRecommendations(recs);
           } catch (err) {
-            console.log('Recommendations not available:', err);
           }
         }
       } catch (error) {
@@ -1650,20 +1644,16 @@ function MovieDetailPage({
         return;
       }
       
-      console.log('Checking watchlist status for movie:', movie.id);
       
       try {
         const freshWatchlist = await getUserWatchlist(true);
-        console.log('Fresh watchlist from server:', freshWatchlist.length, 'items');
         
         const serverFound = freshWatchlist.find(item => item.title_id === movie.id);
         
         if (serverFound) {
-          console.log('Found on server with status:', serverFound.status);
           setSaved(true);
           setCurrentStatus(serverFound.status);
         } else {
-          console.log('Not found on server');
           setSaved(false);
           setCurrentStatus(null);
         }
@@ -1705,7 +1695,6 @@ function MovieDetailPage({
           const reviewsData = await getTitleReviews(movie.id, 10);
           setReviews(reviewsData);
         } catch (err) {
-          console.log('Reviews endpoint error:', err);
           setReviews([]);
         }
       } catch (error) {
@@ -2059,20 +2048,16 @@ function TVDetailPage({
         return;
       }
       
-      console.log('Checking watchlist status for TV series:', tvShow.id);
       
       try {
         const freshWatchlist = await getUserWatchlist(true);
-        console.log('Fresh watchlist from server:', freshWatchlist.length, 'items');
         
         const serverFound = freshWatchlist.find(item => item.title_id === tvShow.id);
         
         if (serverFound) {
-          console.log('Found on server with status:', serverFound.status);
           setSaved(true);
           setCurrentStatus(serverFound.status);
         } else {
-          console.log('Not found on server');
           setSaved(false);
           setCurrentStatus(null);
         }
@@ -2118,7 +2103,6 @@ function TVDetailPage({
           const reviewsData = await getTitleReviews(tvShow.id, 10);
           setReviews(reviewsData);
         } catch (err) {
-          console.log('Reviews endpoint error:', err);
           setReviews([]);
         }
         
@@ -2447,7 +2431,7 @@ function TVDetailPage({
                   id: item.title_id,
                   title: item.name_fa,
                   originalTitle: item.name_en,
-                  img: getPosterUrl(item.poster_url, item.name_en), // <-- تغییر این خط
+                  img: getPosterUrl(item.poster_url, item.name_en), 
                   rating: item.score,
                   year: item.release_year,
                   duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
@@ -2614,7 +2598,6 @@ function BrowsePage({
         offset: (currentPage - 1) * 20
       };
       
-      console.log('Search params:', params);
       
       const results = await searchTitles(params);
       setSearchResults(results);
@@ -3014,19 +2997,10 @@ function ProfilePage({
 
         try {
           const watchlistData = await getUserWatchlist(true);
-          console.log('📋 Watchlist data received in profile:', watchlistData);
-          console.log('📊 Status distribution:', {
-            want_to_watch: watchlistData.filter(i => i.status === 'want_to_watch').length,
-            watching: watchlistData.filter(i => i.status === 'watching').length,
-            watched: watchlistData.filter(i => i.status === 'watched').length,
-          });
-         
-          console.log('🔍 First 3 items status:', watchlistData.slice(0, 3).map(i => ({ id: i.title_id, name: i.name_fa, status: i.status })));
           setWatchlistItems(watchlistData);
         } catch (watchlistErr) {
           console.error('Failed to fetch watchlist:', watchlistErr);
           const localWatchlist = getWatchlistFromLocalStorage();
-          console.log('📋 Local watchlist:', localWatchlist);
           setWatchlistItems(localWatchlist);
         }
         
@@ -3035,7 +3009,6 @@ function ProfilePage({
         if (storedRatings) {
           const ratingsData = JSON.parse(storedRatings);
           setUserRatings(ratingsData);
-          console.log('✅ Ratings loaded from localStorage:', ratingsData.length);
         } else {
           setUserRatings([]);
         }
@@ -3078,7 +3051,7 @@ function ProfilePage({
     id: item.title_id,
     title: item.name_fa,
     originalTitle: item.name_en,
-    img: getPosterUrl(item.poster_url, item.name_en),  // استفاده از getPosterUrl
+    img: getPosterUrl(item.poster_url, item.name_en),  
     rating: item.score || 0,
     year: item.release_year,
     duration: item.duration_mins ? `${item.duration_mins} دقیقه` : 
@@ -3671,7 +3644,7 @@ function ProfilePage({
                   value={currentPassword} 
                   onChange={(e) => {
                     setCurrentPassword(e.target.value);
-                    setPasswordError(""); // Clear error when user types
+                    setPasswordError(""); 
                   }} 
                   placeholder="رمز عبور فعلی را وارد کنید" 
                   className={`w-full bg-background border rounded-lg px-4 py-3 text-foreground text-sm focus:outline-none focus:border-primary/40 transition-colors ${
@@ -3957,6 +3930,9 @@ function ProfilePage({
 // ── App ────────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const routerNavigate = useNavigate();
+  const location = useLocation();
+
   const [page, setPage] = useState<Page>("home");
   const [pageHistory, setPageHistory] = useState<Page[]>([]);
   const [ratedTitles, setRatedTitles] = useState<RatedEntry[]>(SEED_RATINGS);
@@ -3964,7 +3940,19 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authGateModal, setAuthGateModal] = useState<"login" | "signup" | null>(null);
   const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; email: string } | null>(null);
-  const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(null);
+
+  const [selectedMovie, setSelectedMovie] = useState<MovieData | null>(() => {
+    try {
+      const savedMovie = sessionStorage.getItem('selectedMovie');
+      if (savedMovie) {
+        return JSON.parse(savedMovie);
+      }
+    } catch (e) {
+      console.error('Failed to parse saved movie:', e);
+    }
+    return null;
+  });
+  
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
@@ -3977,7 +3965,82 @@ export default function App() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [currentReviewTitle, setCurrentReviewTitle] = useState<MovieData | null>(null);
 
-  // Load user from localStorage on app start
+  useEffect(() => {
+    if (selectedMovie) {
+      sessionStorage.setItem('selectedMovie', JSON.stringify(selectedMovie));
+    } else {
+      sessionStorage.removeItem('selectedMovie');
+    }
+  }, [selectedMovie]);
+
+  const findMovieById = (id: number): MovieData | null => {
+    if (selectedMovie && selectedMovie.id === id) {
+      return selectedMovie;
+    }
+    
+    const localMovie = [...MOVIES, ...TV_SERIES].find(m => m.id === id);
+    if (localMovie) {
+      return localMovie;
+    }
+    
+    try {
+      const savedMovie = sessionStorage.getItem('selectedMovie');
+      if (savedMovie) {
+        const parsed = JSON.parse(savedMovie);
+        if (parsed.id === id) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse saved movie:', e);
+    }
+
+    try {
+      const savedMovie = localStorage.getItem(`movie_${id}`);
+      if (savedMovie) {
+        return JSON.parse(savedMovie);
+      }
+    } catch (e) {
+      console.error('Failed to parse movie from localStorage:', e);
+    }
+    
+    return null;
+  };
+
+  useEffect(() => {
+    const path = location.pathname;
+    
+    if (path === '/') {
+      setPage('home');
+      sessionStorage.removeItem('selectedMovie');
+    }
+    else if (path === '/browse') {
+      setPage('browse');
+      sessionStorage.removeItem('selectedMovie');
+    }
+    else if (path === '/profile') {
+      setPage('profile');
+      sessionStorage.removeItem('selectedMovie');
+    }
+    else if (path.startsWith('/detail/')) {
+      const id = parseInt(path.split('/')[2]);
+      const movie = findMovieById(id);
+      
+      if (movie) {
+        setSelectedMovie(movie);
+        setPage(movie.type === 'TV' ? 'tv' : 'movie');
+      } else {
+        setSelectedMovie(null);
+        setPage('home');
+        routerNavigate('/');
+      }
+    }
+    else {
+      setPage('home');
+    }
+  }, [location.pathname]);
+
+
   useEffect(() => {
     const userData = localStorage.getItem('user_data');
     const token = localStorage.getItem('access_token');
@@ -4004,18 +4067,36 @@ export default function App() {
   }
 
   function navigate(p: Page, movieData?: MovieData) {
-    console.log('Navigating to:', p, 'isLoggedIn:', isLoggedIn);
     
     if (p === "profile" && !isLoggedIn) {
-      console.log('Profile access denied, showing auth modal');
+
       setAuthGateModal("login");
       return;
     }
+    
     if (movieData) {
       setSelectedMovie(movieData);
     }
+    
     setPageHistory((prev) => [...prev, page]);
     setPage(p);
+  
+    if (p === 'home') {
+      routerNavigate('/');
+    } 
+    else if (p === 'browse') {
+      routerNavigate('/browse');
+    }
+    else if (p === 'profile') {
+      routerNavigate('/profile');
+    }
+    else if ((p === 'movie' || p === 'tv') && movieData) {
+      routerNavigate(`/detail/${movieData.id}`);
+    }
+    else {
+      routerNavigate('/');
+    }
+    
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
@@ -4073,19 +4154,15 @@ export default function App() {
   }
 
   async function handleLogin() {
-    console.log('Handling login...');
     
     const token = localStorage.getItem('access_token');
     const userData = localStorage.getItem('user_data');
     
-    console.log('Token exists:', !!token);
-    console.log('User data exists:', !!userData);
     
     if (userData) {
       try {
         const user = JSON.parse(userData);
         setCurrentUser(user);
-        console.log('User set:', user);
       } catch (e) {
         console.error('Failed to parse user data', e);
       }
@@ -4093,12 +4170,9 @@ export default function App() {
     
     setIsLoggedIn(true);
     setAuthGateModal(null);
-    
-    console.log('Login completed, isLoggedIn set to true');
 
     try {
       const watchlist = await syncWatchlistFromServer();
-      console.log('Watchlist synced:', watchlist.length, 'items');
     } catch (error) {
       console.error('Failed to sync watchlist:', error);
     }

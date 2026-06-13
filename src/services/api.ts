@@ -502,10 +502,8 @@ export async function removeFromWatchlist(titleId: number): Promise<ApiResponse>
 
 export async function getUserWatchlist(forceRefresh: boolean = false): Promise<WatchlistItem[]> {
   if (forceRefresh) {
-    console.log('🔄 Force fetching watchlist from server...');
     const token = getToken();
     if (!token) {
-      console.log('No token, returning empty');
       return [];
     }
     
@@ -520,11 +518,8 @@ export async function getUserWatchlist(forceRefresh: boolean = false): Promise<W
           ...item,
           status: normalizeBackendStatus(item.status)
         }));
-        console.log('✅ Watchlist fetched:', data.length, 'items');
         saveWatchlistToLocalStorage(data);
         return data;
-      } else {
-        console.log('❌ Watchlist fetch failed with status:', response.status);
       }
     } catch (error) {
       console.error('Error fetching watchlist:', error);
@@ -533,7 +528,6 @@ export async function getUserWatchlist(forceRefresh: boolean = false): Promise<W
   
   const localData = getWatchlistFromLocalStorage();
   if (localData && localData.length > 0) {
-    console.log('📦 Using cached watchlist:', localData.length, 'items');
     return localData;
   }
   
@@ -554,10 +548,8 @@ function normalizeBackendStatus(status: string): WatchlistStatus {
 }
 
 export async function syncWatchlistFromServer(): Promise<WatchlistItem[]> {
-  console.log('🔄 Syncing watchlist from server...');
   const token = getToken();
   if (!token) {
-    console.log('No token found');
     return [];
   }
   
@@ -571,15 +563,12 @@ export async function syncWatchlistFromServer(): Promise<WatchlistItem[]> {
     
     if (response.ok) {
       const data = await response.json();
-      console.log('✅ Watchlist synced:', data.length, 'items');
       saveWatchlistToLocalStorage(data);
       return data;
     } else {
-      console.log('❌ Sync failed with status:', response.status);
       return [];
     }
   } catch (error) {
-    console.error('❌ Sync error:', error);
     return [];
   }
 }
@@ -623,7 +612,6 @@ export async function deleteProfile(password: string): Promise<{ success: boolea
     body: JSON.stringify({ password: password }),
   });
   
-  console.log('Response status:', response.status);
   return handleResponse<{ success: boolean; message: string }>(response);
 }
 
@@ -765,10 +753,8 @@ export async function getPopularGenres(limit: number = 5): Promise<PopularGenre[
 export async function getRecommendations(limit: number = 5): Promise<Recommendation[]> {
   const token = getToken();
   
-  console.log('🔑 getRecommendations - Token exists:', !!token);
   
   if (!token) {
-    console.log('❌ No token found, returning empty array');
     return [];
   }
   
@@ -780,25 +766,20 @@ export async function getRecommendations(limit: number = 5): Promise<Recommendat
       },
     });
     
-    console.log('📡 Recommendations response status:', response.status);
     
     if (response.status === 401) {
-      console.log('🔐 Token invalid or expired - clearing storage');
       removeToken();
       localStorage.removeItem('user_data');
       return [];
     }
     
     if (!response.ok) {
-      console.log(`❌ Recommendations API error: ${response.status}`);
       return [];
     }
     
     const data = await handleResponse<Recommendation[]>(response);
-    console.log(`✅ Recommendations received: ${data.length} items`);
     return data;
   } catch (error) {
-    console.error('❌ Failed to fetch recommendations:', error);
     return [];
   }
 }
